@@ -52,29 +52,32 @@ backend without needing Docker.
 **Done when:** The Gateway can safely receive a photo and hand it to the
 Orchestrator. The current response is still a placeholder, not an AI diagnosis.
 
-## Phase 2 — Vision Service (**NEXT**)
+## Phase 2 — Vision Service (**IMPLEMENTED; live verification pending key**)
 
 **Goal:** Turn an uploaded image into structured device and error-code details.
 
-- [ ] Define the Vision input and output contract for transient image bytes.
-- [ ] Add a provider interface so Gemini can later be replaced without changing
+- [x] Define the Vision input and output contract for transient image bytes.
+- [x] Add a provider interface so Gemini can later be replaced without changing
   the service API.
-- [ ] Implement a mock provider for reliable tests without network calls or API
+- [x] Implement a mock provider for reliable tests without network calls or API
   charges.
-- [ ] Return device category, brand/model when visible, observed text, error
+- [x] Return device category, brand/model when visible, observed text, error
   codes, confidence, and warnings.
-- [ ] Handle unclear images without guessing; return an explicit ambiguous or
+- [x] Handle unclear images without guessing; return an explicit ambiguous or
   unrecognized result.
-- [ ] Add Gemini using a secret loaded from local environment configuration;
+- [x] Add Gemini using a secret loaded from local environment configuration;
   never commit the key.
-- [ ] Test valid results, unclear images, provider errors, and invalid output.
-- [ ] Update the API contract and setup instructions.
+- [x] Test valid results, unclear images, provider errors, and invalid output.
+- [x] Update the API contract and setup instructions.
+- [ ] Verify a live Gemini request after the user supplies a key in the local
+  ignored `.env` file.
 
-**Done when:** A diagnosis image reaches the Vision Service and returns a
-validated structured result. Mocked tests pass; live Gemini use is separately
-verified when a key is configured.
+**Done when:** A direct service request returns a validated structured result.
+Mock mode and provider failure paths are testable offline; live Gemini is
+verified separately after a key is configured. Orchestrator integration is in
+Phase 4.
 
-## Phase 3 — Retrieval Service
+## Phase 3 — Retrieval Service (**NEXT**)
 
 **Goal:** Find useful support information and preserve links for citations.
 
@@ -201,10 +204,11 @@ depend on it.
 
 ## Current progress snapshot
 
-- **Completed:** Project foundation and Gateway image intake.
-- **Current implementation:** Gateway → Orchestrator accepts and validates an
-  image; the Orchestrator still returns a placeholder response.
-- **Next target:** Vision Service contract and mock provider, then Gemini.
+- **Completed:** Project foundation, Gateway image intake, and the Vision
+  Service with mock and configurable Gemini providers.
+- **Current implementation:** Vision can be called directly; the Orchestrator
+  does not call it yet, so the public diagnosis endpoint is still a placeholder.
+- **Next target:** Retrieval Service and its mock/Tavily provider boundary.
 - **Deferred:** PostgreSQL, Redis, Docker execution, mobile app, voice, AR, and
   offline support until their phases.
 

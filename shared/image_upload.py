@@ -1,10 +1,14 @@
 """Validation helpers for transient SnapLens image uploads."""
 
+import os
 from uuid import UUID, uuid4
 
 from starlette.responses import JSONResponse
+from shared import config as _config  # noqa: F401
 
-MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_IMAGE_BYTES = int(os.getenv("MAX_IMAGE_BYTES", str(10 * 1024 * 1024)))
+if MAX_IMAGE_BYTES <= 0:
+    raise ValueError("MAX_IMAGE_BYTES must be a positive integer")
 MAX_REQUEST_BODY_BYTES = MAX_IMAGE_BYTES + 64 * 1024
 ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 

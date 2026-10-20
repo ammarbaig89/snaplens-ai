@@ -2,7 +2,7 @@
 
 **AI-powered visual troubleshooting assistant | Multimodal Vision · Live Web-RAG · Agentic AI**
 
-> **Current milestone:** The Gateway accepts and validates JPEG, PNG, and WebP diagnosis images up to 10 MiB, then forwards them transiently to the Orchestrator. The Orchestrator validates them again; images are not retained after the request. The diagnosis response remains a placeholder while AI providers, persistence, and the mobile app are not implemented. Docker configuration is included for later use.
+> **Current milestone:** The Gateway and Vision Service accept validated image uploads up to 10 MiB. The Vision Service has a no-cost mock mode and a configurable Gemini provider. The Orchestrator has not connected the diagnosis flow to Vision yet, so the public diagnosis response remains a placeholder. Images are not retained after request processing. Docker configuration is included for later use.
 
 SnapLens AI is a cross-platform mobile application designed to turn a smartphone camera into an intelligent troubleshooting assistant. Users photograph equipment, appliances, electronics, or visible error codes; the system identifies relevant details, retrieves current technical information, and produces evidence-grounded, step-by-step guidance.
 
@@ -22,7 +22,7 @@ SnapLens AI is a cross-platform mobile application designed to turn a smartphone
 
 | Capability | Description | Status |
 | :--- | :--- | :--- |
-| **Image-based device identification** | Multimodal analysis of photos and visible labels | Planned |
+| **Image-based device identification** | Multimodal analysis of photos and visible labels | Vision Service implemented; Orchestrator integration next |
 | **Live Web-RAG** | Search, extract, rank, and ground answers in retrieved sources | Planned |
 | **Diagnostic orchestration** | Conditional workflows, clarification questions, and session state | Service scaffold; workflow planned |
 | **Mobile client** | Cross-platform camera, results, history, and voice interfaces | Planned |
@@ -113,7 +113,7 @@ flowchart TD
 | :---: | :--- |
 | **0** | Architecture decisions, repository, service contracts | Complete |
 | **1** | Local FastAPI foundation and Gateway-to-Orchestrator path | Foundation complete; authentication, persistence, and media handling remain |
-| **2** | Vision analysis, structured identification, OCR/error-code extraction |
+| **2** | Vision analysis, structured identification, OCR/error-code extraction | Provider service ready; live Gemini verification needs a key |
 | **3** | Live Web-RAG, manuals/PDF extraction, source ranking, cited synthesis |
 | **4** | LangGraph orchestration, diagnostic state, follow-up conversations |
 | **5** | React Native mobile application and full backend integration |
@@ -155,7 +155,7 @@ The service folder name identifies the microservice; its `main.py` file is the F
 
 - Python 3.12 or newer.
 - Docker is not required for the local backend workflow below.
-- Provider credentials are not required for the current placeholder response.
+- Provider credentials are not required for the default mock Vision provider.
 
 ### Create the Python environment
 
@@ -164,11 +164,18 @@ Run these commands from the repository root in PowerShell:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
+
+The default `VISION_PROVIDER=mock` needs no API key. To use Gemini later, add
+your private key to the ignored local `.env` file and set
+`VISION_PROVIDER=gemini`. The tracked `.env.example` contains only safe
+placeholders. See [Environment variables](docs/environment-variables.md) for
+which settings are active and which are reserved for later phases.
 
 ### Run the backend locally
 
-Open two PowerShell terminals at the repository root. In both terminals, set the shared contracts path:
+Open three PowerShell terminals at the repository root. In each terminal, set the shared contracts path:
 
 ```powershell
 $repo = (Resolve-Path .).Path
@@ -182,7 +189,14 @@ Set-Location (Join-Path $repo 'services\diagnostic-orchestrator')
 & (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8001
 ```
 
-In the second terminal, start the API Gateway:
+In the second terminal, start the Vision Service:
+
+```powershell
+Set-Location (Join-Path $repo 'services\vision-service')
+& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8002
+```
+
+In the third terminal, start the API Gateway:
 
 ```powershell
 $env:ORCHESTRATOR_URL = 'http://127.0.0.1:8001'
@@ -199,7 +213,20 @@ curl.exe -X POST http://127.0.0.1:8000/v1/diagnoses `
   -F "image=@sample.png"
 ```
 
-The expected response has `status: accepted` and says that the workflow is not implemented yet. Use a local JPEG, PNG, or WebP image no larger than 10 MiB for `sample.png`. Press **Ctrl+C** in each service terminal to stop it.
+The public diagnosis response is still a placeholder until the Orchestrator is
+connected to Vision and Retrieval. You can call the Vision Service directly to
+try its mock result:
+
+```powershell
+curl.exe -X POST http://127.0.0.1:8002/internal/v1/vision/analyses `
+  -F "request_id=550e8400-e29b-41d4-a716-446655440000" `
+  -F "question=Read the visible error code" `
+  -F "image=@sample.png"
+```
+
+The mock response says no real analysis was performed. Use a local JPEG, PNG,
+or WebP image no larger than 10 MiB. Press **Ctrl+C** in each service terminal
+to stop it.
 
 ### Run tests
 
@@ -230,6 +257,7 @@ The remaining services can be started the same way from their `services/<service
 The architecture blueprint and API contracts are documented in [`docs/`](docs/). Database schemas and operational runbooks will be added as those features are implemented.
 
 - [Project roadmap and progress checklist](docs/PROJECT-ROADMAP.md)
+- [Environment variables by service and phase](docs/environment-variables.md)
 
 ---
 

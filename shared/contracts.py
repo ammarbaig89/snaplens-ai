@@ -1,7 +1,7 @@
 """Strict version 1 HTTP contracts shared across SnapLens services."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
@@ -16,7 +16,6 @@ class DiagnosisRequest(ContractModel):
 
     question: str = Field(min_length=1, max_length=2000)
     session_id: UUID | None = None
-    image_asset_id: UUID | None = None
 
 
 class DiagnosisAccepted(ContractModel):
@@ -35,16 +34,22 @@ class DeviceIdentification(ContractModel):
 
 class VisionAnalysisRequest(ContractModel):
     request_id: UUID
-    image_asset_id: UUID
+    question: str | None = Field(default=None, max_length=2000)
 
 
 class VisionAnalysisResponse(ContractModel):
     request_id: UUID
     result_status: Literal["identified", "ambiguous", "unrecognized"]
     device: DeviceIdentification
-    observed_text: list[str] = Field(default_factory=list, max_length=100)
-    error_codes: list[str] = Field(default_factory=list, max_length=30)
-    warnings: list[str] = Field(default_factory=list, max_length=30)
+    observed_text: list[Annotated[str, Field(max_length=500)]] = Field(
+        default_factory=list, max_length=100
+    )
+    error_codes: list[Annotated[str, Field(max_length=100)]] = Field(
+        default_factory=list, max_length=30
+    )
+    warnings: list[Annotated[str, Field(max_length=500)]] = Field(
+        default_factory=list, max_length=30
+    )
 
 
 class RetrievalSearchRequest(ContractModel):

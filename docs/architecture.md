@@ -25,7 +25,7 @@ flowchart LR
 |---|---|---:|---|
 | API Gateway | Client API, request IDs, validation boundary, routing, stable upstream errors | Yes | Diagnosis request route and Orchestrator readiness |
 | Diagnostic Orchestrator | Workflow state and calls to specialist services | No | Accepts a diagnosis request; LangGraph comes later |
-| Vision Service | Image interpretation and structured identification | No | Health endpoints; Gemini integration later |
+| Vision Service | Image interpretation and structured identification | No | Multipart analysis endpoint; mock and configurable Gemini providers |
 | Retrieval Service | Search, extraction, ranking, and source metadata | No | Health endpoints; Tavily integration later |
 | Session Service | Diagnostic session and conversation history | No | Health endpoints; database persistence later |
 | PostgreSQL | Durable relational state | No | Local persistent volume |
@@ -38,12 +38,17 @@ their own data through their owner rather than querying another service's tables
 
 ## Request flow
 
-1. The mobile app sends `POST /v1/diagnoses` to the Gateway.
-2. The Gateway validates the shared request model, creates or preserves an
-   `X-Request-ID`, and calls `POST /internal/v1/diagnoses` on the Orchestrator.
-3. The Orchestrator returns an accepted response. The workflow is a placeholder
-   in this milestone; it must not be presented as an AI diagnosis.
-4. The Gateway returns the request and session IDs to the client.
+1. The mobile app sends a question and image to `POST /v1/diagnoses` on the
+   Gateway.
+2. The Gateway validates the request, creates or preserves an `X-Request-ID`,
+   and forwards the multipart request to the Orchestrator.
+3. The Vision Service can be called directly at
+   `POST /internal/v1/vision/analyses`; it validates and analyzes the transient
+   image using the configured provider.
+4. The Orchestrator-to-Vision and Retrieval workflow is not connected yet. The
+   Orchestrator currently returns an accepted placeholder, which must not be
+   presented as an AI diagnosis.
+5. The Gateway returns the accepted response to the client.
 
 All HTTP paths are versioned. Shared Pydantic models live in
 `shared/contracts.py`. Internal endpoints use the `/internal/` prefix and are
@@ -53,7 +58,8 @@ and does not leak internal exception details.
 
 ## Operational boundaries
 
-- Every service exposes `/health/live` and `/health/ready`.
+- Every service exposes `/health/live` and `/health/ready`. Vision readiness
+  fails when Gemini is selected without a configured key.
 - Gateway readiness also checks the Orchestrator dependency.
 - Only the Gateway and the local developer PostgreSQL port are published to the
   host; Redis and internal service ports stay on the Compose network.

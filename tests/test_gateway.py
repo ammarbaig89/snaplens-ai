@@ -176,13 +176,12 @@ class GatewayTests(unittest.TestCase):
 
     def test_versioned_service_contracts_are_constrained(self) -> None:
         request_id = UUID("550e8400-e29b-41d4-a716-446655440000")
-        asset_id = UUID("550e8400-e29b-41d4-a716-446655440002")
         self.assertEqual(
             VisionAnalysisRequest(
                 request_id=request_id,
-                image_asset_id=asset_id,
-            ).image_asset_id,
-            asset_id,
+                question="Read the visible error code",
+            ).question,
+            "Read the visible error code",
         )
         with self.assertRaises(ValidationError):
             RetrievalSearchRequest(request_id=request_id, query="manual", limit=11)
