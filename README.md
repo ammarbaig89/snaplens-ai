@@ -2,7 +2,7 @@
 
 **AI-powered visual troubleshooting assistant | Multimodal Vision · Live Web-RAG · Agentic AI**
 
-> **Project status:** Architecture and development setup. Features below describe the intended system and are not yet implemented.
+> **Current milestone:** The backend service foundation is in place. The API Gateway and Orchestrator have a working local HTTP path, and all service skeletons expose health checks. Diagnosis responses are placeholders; AI providers, persistence, and the mobile app are not implemented yet. Docker configuration is included for later use.
 
 SnapLens AI is a cross-platform mobile application designed to turn a smartphone camera into an intelligent troubleshooting assistant. Users photograph equipment, appliances, electronics, or visible error codes; the system identifies relevant details, retrieves current technical information, and produces evidence-grounded, step-by-step guidance.
 
@@ -24,7 +24,7 @@ SnapLens AI is a cross-platform mobile application designed to turn a smartphone
 | :--- | :--- | :--- |
 | **Image-based device identification** | Multimodal analysis of photos and visible labels | Planned |
 | **Live Web-RAG** | Search, extract, rank, and ground answers in retrieved sources | Planned |
-| **Diagnostic orchestration** | Conditional workflows, clarification questions, and session state | Planned |
+| **Diagnostic orchestration** | Conditional workflows, clarification questions, and session state | Service scaffold; workflow planned |
 | **Mobile client** | Cross-platform camera, results, history, and voice interfaces | Planned |
 | **Voice assistance** | Speech input, transcription, and spoken responses | Planned |
 | **AR guidance** | Visual annotations where device and platform support allow | Research / planned |
@@ -111,8 +111,8 @@ flowchart TD
 
 | Phase | Scope |
 | :---: | :--- |
-| **0** | Architecture decisions, repository, development environment, contracts |
-| **1** | FastAPI foundation, security, authentication, persistence, media handling |
+| **0** | Architecture decisions, repository, service contracts | Complete |
+| **1** | Local FastAPI foundation and Gateway-to-Orchestrator path | Foundation complete; authentication, persistence, and media handling remain |
 | **2** | Vision analysis, structured identification, OCR/error-code extraction |
 | **3** | Live Web-RAG, manuals/PDF extraction, source ranking, cited synthesis |
 | **4** | LangGraph orchestration, diagnostic state, follow-up conversations |
@@ -124,30 +124,89 @@ flowchart TD
 
 ---
 
-## Proposed Repository Layout
+## Repository Layout
 
 ```text
 snaplens-ai/
 ├── apps/
-│   ├── api/               # FastAPI application and AI services
-│   └── mobile/            # React Native / Expo application
+│   ├── api-gateway/
+│   ├── diagnostic-orchestrator/
+│   ├── vision-service/
+│   ├── retrieval-service/
+│   └── session-service/
 ├── packages/
-│   └── api-client/        # Generated/shared API client and contracts
-├── infrastructure/        # Container, CI/CD, and deployment configuration
-├── docs/                  # Architecture, diagrams, ADRs, API contracts
-├── tests/                 # Cross-service integration and E2E tests
-├── .github/workflows/     # Automated checks and deployments
+│   └── contracts/         # Shared versioned Pydantic contracts
+├── docs/                  # Architecture, ADRs, and API contracts
+├── scripts/               # Local smoke checks
+├── tests/                 # Backend contract and handler tests
+├── docker-compose.yml     # Optional local container setup
 ├── .gitignore
 └── README.md
 ```
 
-*This is a proposed structure. Internal AI modules (vision, retrieval, agents, evaluation) will live inside the API app initially and can be extracted only if justified by development needs.*
+The mobile app, CI workflows, and production deployment configuration will be added in later phases.
 
 ---
 
 ## Local Development
 
-Development instructions will be added once the API and mobile app scaffolds are committed. Planned requirements include Python, Node.js, Git, a mobile test device/emulator, and provider credentials.
+### Requirements
+
+- Python 3.12 or newer.
+- Docker is not required for the local backend workflow below.
+- Provider credentials are not required for the current placeholder response.
+
+### Create the Python environment
+
+Run these commands from the repository root in PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+### Run the backend locally
+
+Open two PowerShell terminals at the repository root. In both terminals, set the shared contracts path:
+
+```powershell
+$repo = (Resolve-Path .).Path
+$env:PYTHONPATH = Join-Path $repo 'packages\contracts\src'
+```
+
+In the first terminal, start the Diagnostic Orchestrator:
+
+```powershell
+Set-Location (Join-Path $repo 'apps\diagnostic-orchestrator')
+& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
+
+In the second terminal, start the API Gateway:
+
+```powershell
+$env:ORCHESTRATOR_URL = 'http://127.0.0.1:8001'
+Set-Location (Join-Path $repo 'apps\api-gateway')
+& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Check Gateway readiness and send a sample request from another PowerShell terminal:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health/ready
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/v1/diagnoses `
+  -ContentType 'application/json' `
+  -Body '{"question":"What does this error code mean?"}'
+```
+
+The expected response has `status: accepted` and says that the workflow is not implemented yet. Press **Ctrl+C** in each service terminal to stop it.
+
+### Run tests
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+The remaining services can be started the same way from their `apps/<service>/` folders to check `/health/live` and `/health/ready`. Dockerfiles and `docker-compose.yml` remain available for later; the Compose stack has not been validated as part of this local workflow.
 
 > [!IMPORTANT]
 > **Environment & Secrets:** Never commit actual `.env` files, private credentials, uploaded user images, or sensitive logs. Each application will provide a sanitized `.env.example` listing required variables without values.
@@ -167,7 +226,7 @@ Development instructions will be added once the API and mobile app scaffolds are
 
 ## Documentation
 
-The full architecture blueprint, component interaction diagrams, API contracts, database schema, and operational runbooks will be maintained in [`docs/`](docs/) as they are added to the repository.
+The architecture blueprint and API contracts are documented in [`docs/`](docs/). Database schemas and operational runbooks will be added as those features are implemented.
 
 ---
 
