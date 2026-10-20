@@ -14,11 +14,11 @@ from fastapi import Response
 from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "packages" / "contracts" / "src"))
-sys.path.insert(0, str(ROOT / "apps" / "api-gateway"))
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "services" / "api-gateway"))
 
-from app.main import app  # noqa: E402
-from snaplens_contracts import (  # noqa: E402
+import main as gateway  # noqa: E402
+from shared.contracts import (  # noqa: E402
     DiagnosisAccepted,
     DiagnosisRequest,
     RetrievalSearchRequest,
@@ -26,7 +26,7 @@ from snaplens_contracts import (  # noqa: E402
     VisionAnalysisRequest,
 )
 
-ORCHESTRATOR_PATH = ROOT / "apps" / "diagnostic-orchestrator" / "app" / "main.py"
+ORCHESTRATOR_PATH = ROOT / "services" / "diagnostic-orchestrator" / "main.py"
 ORCHESTRATOR_SPEC = importlib.util.spec_from_file_location(
     "snaplens_orchestrator_main", ORCHESTRATOR_PATH
 )
@@ -48,26 +48,26 @@ def run_immediate_coroutine(coroutine: Coroutine[Any, Any, Result]) -> Result:
 
 class GatewayTests(unittest.TestCase):
     def test_live_health(self) -> None:
-        from app.main import live
+        from main import live
 
         health = run_immediate_coroutine(live())
         self.assertEqual(health.model_dump(), {"status": "ok", "service": "api-gateway"})
 
     def test_gateway_readiness_fails_if_orchestrator_is_unavailable(self) -> None:
-        from app.main import ready
+        from main import ready
 
         response = Response()
 
         async def unavailable() -> bool:
             return False
 
-        with patch("app.main._orchestrator_ready", new=unavailable):
+        with patch("main._orchestrator_ready", new=unavailable):
             health = run_immediate_coroutine(ready(response))
         self.assertEqual(response.status_code, 503)
         self.assertEqual(health.status, "not_ready")
 
     def test_gateway_to_orchestrator_handler_path(self) -> None:
-        from app.main import create_diagnosis
+        from main import create_diagnosis
 
         request_id = UUID("550e8400-e29b-41d4-a716-446655440000")
         session_id = UUID("550e8400-e29b-41d4-a716-446655440001")
@@ -86,7 +86,7 @@ class GatewayTests(unittest.TestCase):
                 request=httpx.Request("POST", "http://orchestrator/internal/v1/diagnoses"),
             )
 
-        with patch("app.main._forward_diagnosis", new=in_process_orchestrator):
+        with patch("main._forward_diagnosis", new=in_process_orchestrator):
             result = run_immediate_coroutine(
                 create_diagnosis(
                     DiagnosisRequest(
@@ -104,8 +104,8 @@ class GatewayTests(unittest.TestCase):
         self.assertIn("not implemented yet", result.message)
 
     def test_openapi_documents_gateway_and_orchestrator_routes(self) -> None:
-        self.assertIn("/v1/diagnoses", app.openapi()["paths"])
-        self.assertIn("/health/ready", app.openapi()["paths"])
+        self.assertIn("/v1/diagnoses", gateway.app.openapi()["paths"])
+        self.assertIn("/health/ready", gateway.app.openapi()["paths"])
         self.assertIn(
             "/internal/v1/diagnoses",
             orchestrator.app.openapi()["paths"],
@@ -137,7 +137,7 @@ class GatewayTests(unittest.TestCase):
             DiagnosisRequest(question="", unexpected="not allowed")
 
     def test_upstream_error_is_stable_and_hides_internal_detail(self) -> None:
-        from app.main import create_diagnosis
+        from main import create_diagnosis
 
         async def unavailable(
             body: DiagnosisRequest, request_id: UUID
@@ -147,7 +147,7 @@ class GatewayTests(unittest.TestCase):
                 request=httpx.Request("POST", "http://orchestrator/internal/v1/diagnoses"),
             )
 
-        with patch("app.main._forward_diagnosis", new=unavailable):
+        with patch("main._forward_diagnosis", new=unavailable):
             response = run_immediate_coroutine(
                 create_diagnosis(DiagnosisRequest(question="Need help"), None)
             )

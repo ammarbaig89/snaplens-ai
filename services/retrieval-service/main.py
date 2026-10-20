@@ -1,7 +1,7 @@
 """Retrieval boundary; search and extraction are deferred to a later phase."""
 
 from fastapi import FastAPI
-from snaplens_contracts import ServiceHealth
+from shared.contracts import ServiceHealth
 
 SERVICE_NAME = "retrieval-service"
 app = FastAPI(title="SnapLens Retrieval Service", version="1.0.0")

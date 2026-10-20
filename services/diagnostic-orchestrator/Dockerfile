@@ -3,10 +3,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
-COPY packages/contracts /app/packages/contracts
-RUN pip install --no-cache-dir /app/packages/contracts
-COPY apps/vision-service/app /app/app
+COPY shared /app/shared
+COPY services/diagnostic-orchestrator/main.py /app/main.py
 RUN addgroup --system app && adduser --system --ingroup app app
 USER app
-EXPOSE 8002
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+EXPOSE 8001
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]

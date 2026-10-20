@@ -128,23 +128,24 @@ flowchart TD
 
 ```text
 snaplens-ai/
-├── apps/
-│   ├── api-gateway/
-│   ├── diagnostic-orchestrator/
-│   ├── vision-service/
-│   ├── retrieval-service/
-│   └── session-service/
-├── packages/
-│   └── contracts/         # Shared versioned Pydantic contracts
+├── services/              # Each folder is one independently runnable microservice
+│   ├── api-gateway/       # Public API entry point
+│   ├── diagnostic-orchestrator/ # Coordinates diagnosis steps
+│   ├── vision-service/    # Image understanding
+│   ├── retrieval-service/ # Search and source retrieval
+│   └── session-service/   # Session and conversation history
+├── shared/
+│   └── contracts.py       # Request and response models used by services
 ├── docs/                  # Architecture, ADRs, and API contracts
 ├── scripts/               # Local smoke checks
 ├── tests/                 # Backend contract and handler tests
 ├── docker-compose.yml     # Optional local container setup
+├── .venv/                 # Local Python dependencies; created during setup and Git-ignored
 ├── .gitignore
 └── README.md
 ```
 
-The mobile app, CI workflows, and production deployment configuration will be added in later phases.
+The service folder name identifies the microservice; its `main.py` file is the FastAPI entry point. The mobile app, CI workflows, and production deployment configuration will be added in later phases.
 
 ---
 
@@ -171,22 +172,22 @@ Open two PowerShell terminals at the repository root. In both terminals, set the
 
 ```powershell
 $repo = (Resolve-Path .).Path
-$env:PYTHONPATH = Join-Path $repo 'packages\contracts\src'
+$env:PYTHONPATH = $repo
 ```
 
 In the first terminal, start the Diagnostic Orchestrator:
 
 ```powershell
-Set-Location (Join-Path $repo 'apps\diagnostic-orchestrator')
-& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+Set-Location (Join-Path $repo 'services\diagnostic-orchestrator')
+& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8001
 ```
 
 In the second terminal, start the API Gateway:
 
 ```powershell
 $env:ORCHESTRATOR_URL = 'http://127.0.0.1:8001'
-Set-Location (Join-Path $repo 'apps\api-gateway')
-& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Set-Location (Join-Path $repo 'services\api-gateway')
+& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 Check Gateway readiness and send a sample request from another PowerShell terminal:
@@ -206,7 +207,7 @@ The expected response has `status: accepted` and says that the workflow is not i
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The remaining services can be started the same way from their `apps/<service>/` folders to check `/health/live` and `/health/ready`. Dockerfiles and `docker-compose.yml` remain available for later; the Compose stack has not been validated as part of this local workflow.
+The remaining services can be started the same way from their `services/<service-name>/` folders to check `/health/live` and `/health/ready`. Dockerfiles and `docker-compose.yml` remain available for later; the Compose stack has not been validated as part of this local workflow.
 
 > [!IMPORTANT]
 > **Environment & Secrets:** Never commit actual `.env` files, private credentials, uploaded user images, or sensitive logs. Each application will provide a sanitized `.env.example` listing required variables without values.

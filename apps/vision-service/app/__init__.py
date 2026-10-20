@@ -1,1 +1,0 @@
-"""SnapLens image understanding service."""

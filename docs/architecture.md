@@ -46,7 +46,7 @@ their own data through their owner rather than querying another service's tables
 4. The Gateway returns the request and session IDs to the client.
 
 All HTTP paths are versioned. Shared Pydantic models live in
-`packages/contracts`. Internal endpoints use the `/internal/` prefix and are
+`shared/contracts.py`. Internal endpoints use the `/internal/` prefix and are
 not published through the Gateway. Errors use a stable envelope with a
 machine-readable code and request ID. The Gateway applies an upstream timeout
 and does not leak internal exception details.

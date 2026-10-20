@@ -1,1 +1,0 @@
-"""SnapLens web retrieval service."""

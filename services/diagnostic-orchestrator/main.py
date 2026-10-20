@@ -3,7 +3,7 @@
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Header
-from snaplens_contracts import DiagnosisAccepted, DiagnosisRequest, ServiceHealth
+from shared.contracts import DiagnosisAccepted, DiagnosisRequest, ServiceHealth
 
 SERVICE_NAME = "diagnostic-orchestrator"
 app = FastAPI(title="SnapLens Diagnostic Orchestrator", version="1.0.0")

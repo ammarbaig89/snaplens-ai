@@ -1,1 +1,0 @@
-"""SnapLens public API Gateway."""

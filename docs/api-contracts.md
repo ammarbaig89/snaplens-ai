@@ -1,7 +1,7 @@
 # API contracts — version 1
 
 The shared Pydantic models live in
-`packages/contracts/src/snaplens_contracts/models.py`. Each FastAPI service
+`shared/contracts.py`. Each FastAPI service
 publishes its OpenAPI document at `/openapi.json` in its own container.
 
 ## Mobile-facing contract

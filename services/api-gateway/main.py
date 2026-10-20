@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 import httpx
 from fastapi import FastAPI, Header, Response
 from fastapi.responses import JSONResponse
-from snaplens_contracts import (
+from shared.contracts import (
     DiagnosisAccepted,
     DiagnosisRequest,
     ErrorBody,

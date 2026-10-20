@@ -4,7 +4,7 @@ services:
   api-gateway:
     build:
       context: .
-      dockerfile: apps/api-gateway/Dockerfile
+      dockerfile: services/api-gateway/Dockerfile
     environment:
       ORCHESTRATOR_URL: ${ORCHESTRATOR_URL:-http://diagnostic-orchestrator:8001}
       HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-5}
@@ -24,7 +24,7 @@ services:
   diagnostic-orchestrator:
     build:
       context: .
-      dockerfile: apps/diagnostic-orchestrator/Dockerfile
+      dockerfile: services/diagnostic-orchestrator/Dockerfile
     expose:
       - "8001"
     depends_on:
@@ -45,7 +45,7 @@ services:
   vision-service:
     build:
       context: .
-      dockerfile: apps/vision-service/Dockerfile
+      dockerfile: services/vision-service/Dockerfile
     expose:
       - "8002"
     healthcheck:
@@ -59,7 +59,7 @@ services:
   retrieval-service:
     build:
       context: .
-      dockerfile: apps/retrieval-service/Dockerfile
+      dockerfile: services/retrieval-service/Dockerfile
     expose:
       - "8003"
     healthcheck:
@@ -73,7 +73,7 @@ services:
   session-service:
     build:
       context: .
-      dockerfile: apps/session-service/Dockerfile
+      dockerfile: services/session-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-snaplens}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-snaplens}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
