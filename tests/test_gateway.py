@@ -1,8 +1,9 @@
-"""Contract and handler integration tests for the first service milestone."""
+"""Contract and handler tests for the Gateway upload boundary."""
 
-import importlib.util
 import json
+import importlib.util
 import sys
+from tempfile import SpooledTemporaryFile
 import unittest
 from pathlib import Path
 from typing import Any, Coroutine, TypeVar
@@ -12,6 +13,7 @@ from uuid import UUID
 import httpx
 from fastapi import Response
 from pydantic import ValidationError
+from starlette.datastructures import Headers, UploadFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -24,6 +26,11 @@ from shared.contracts import (  # noqa: E402
     RetrievalSearchRequest,
     SessionMessageAppend,
     VisionAnalysisRequest,
+)
+from shared.image_upload import (  # noqa: E402
+    ImageUploadError,
+    MAX_IMAGE_BYTES,
+    validate_image,
 )
 
 ORCHESTRATOR_PATH = ROOT / "services" / "diagnostic-orchestrator" / "main.py"
@@ -47,6 +54,17 @@ def run_immediate_coroutine(coroutine: Coroutine[Any, Any, Result]) -> Result:
 
 
 class GatewayTests(unittest.TestCase):
+    @staticmethod
+    def png_upload(content: bytes = b"\x89PNG\r\n\x1a\nfixture") -> UploadFile:
+        file = SpooledTemporaryFile()
+        file.write(content)
+        file.seek(0)
+        return UploadFile(
+            filename="device.png",
+            file=file,
+            headers=Headers({"content-type": "image/png"}),
+        )
+
     def test_live_health(self) -> None:
         from main import live
 
@@ -71,14 +89,22 @@ class GatewayTests(unittest.TestCase):
 
         request_id = UUID("550e8400-e29b-41d4-a716-446655440000")
         session_id = UUID("550e8400-e29b-41d4-a716-446655440001")
-        forwarded: list[tuple[DiagnosisRequest, UUID]] = []
+        forwarded: list[tuple[DiagnosisRequest, UUID, bytes]] = []
 
         async def in_process_orchestrator(
-            body: DiagnosisRequest, forwarded_id: UUID
+            body: DiagnosisRequest,
+            forwarded_id: UUID,
+            content_type: str | None,
+            content: bytes,
         ) -> httpx.Response:
-            forwarded.append((body, forwarded_id))
+            forwarded.append((body, forwarded_id, content))
             accepted = run_immediate_coroutine(
-                orchestrator.accept_diagnosis(body, forwarded_id)
+                orchestrator.accept_diagnosis(
+                    question=body.question,
+                    session_id=body.session_id,
+                    image=self.png_upload(content),
+                    x_request_id=forwarded_id,
+                )
             )
             return httpx.Response(
                 202,
@@ -89,11 +115,10 @@ class GatewayTests(unittest.TestCase):
         with patch("main._forward_diagnosis", new=in_process_orchestrator):
             result = run_immediate_coroutine(
                 create_diagnosis(
-                    DiagnosisRequest(
-                        question="What does this error code mean?",
-                        session_id=session_id,
-                    ),
-                    request_id,
+                    question="What does this error code mean?",
+                    session_id=session_id,
+                    image=self.png_upload(),
+                    x_request_id=request_id,
                 )
             )
 
@@ -101,7 +126,41 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(result.request_id, request_id)
         self.assertEqual(result.session_id, session_id)
         self.assertEqual(forwarded[0][1], request_id)
-        self.assertIn("not implemented yet", result.message)
+        self.assertEqual(forwarded[0][2], b"\x89PNG\r\n\x1a\nfixture")
+        self.assertIn("Image validated", result.message)
+
+    def test_upload_rejects_mismatched_type_and_oversized_content(self) -> None:
+        with self.assertRaises(ImageUploadError) as mismatch:
+            validate_image("image/png", b"not a png")
+        self.assertEqual(mismatch.exception.status_code, 415)
+
+        with self.assertRaises(ImageUploadError) as oversized:
+            validate_image("image/png", b"\x89PNG\r\n\x1a\n" + b"x" * MAX_IMAGE_BYTES)
+        self.assertEqual(oversized.exception.status_code, 413)
+
+    def test_gateway_returns_safe_error_for_unsupported_image(self) -> None:
+        from main import create_diagnosis
+
+        request_id = UUID("550e8400-e29b-41d4-a716-446655440000")
+        upload = UploadFile(
+            filename="bad.svg",
+            file=SpooledTemporaryFile(),
+            headers=Headers({"content-type": "image/svg+xml"}),
+        )
+        upload.file.write(b"<svg></svg>")
+        upload.file.seek(0)
+        response = run_immediate_coroutine(
+            create_diagnosis(
+                question="What is this?",
+                session_id=None,
+                image=upload,
+                x_request_id=request_id,
+            )
+        )
+        self.assertEqual(response.status_code, 415)
+        payload = json.loads(response.body)
+        self.assertEqual(payload["error"]["code"], "UNSUPPORTED_IMAGE_TYPE")
+        self.assertEqual(payload["error"]["request_id"], str(request_id))
 
     def test_openapi_documents_gateway_and_orchestrator_routes(self) -> None:
         self.assertIn("/v1/diagnoses", gateway.app.openapi()["paths"])
@@ -110,6 +169,10 @@ class GatewayTests(unittest.TestCase):
             "/internal/v1/diagnoses",
             orchestrator.app.openapi()["paths"],
         )
+        upload_types = gateway.app.openapi()["paths"]["/v1/diagnoses"]["post"][
+            "requestBody"
+        ]["content"]
+        self.assertIn("multipart/form-data", upload_types)
 
     def test_versioned_service_contracts_are_constrained(self) -> None:
         request_id = UUID("550e8400-e29b-41d4-a716-446655440000")
@@ -140,7 +203,10 @@ class GatewayTests(unittest.TestCase):
         from main import create_diagnosis
 
         async def unavailable(
-            body: DiagnosisRequest, request_id: UUID
+            body: DiagnosisRequest,
+            request_id: UUID,
+            content_type: str | None,
+            content: bytes,
         ) -> httpx.Response:
             raise httpx.ConnectError(
                 "internal socket detail",
@@ -149,7 +215,12 @@ class GatewayTests(unittest.TestCase):
 
         with patch("main._forward_diagnosis", new=unavailable):
             response = run_immediate_coroutine(
-                create_diagnosis(DiagnosisRequest(question="Need help"), None)
+                create_diagnosis(
+                    question="Need help",
+                    session_id=None,
+                    image=self.png_upload(),
+                    x_request_id=None,
+                )
             )
         self.assertEqual(response.status_code, 502)
         payload = json.loads(response.body)

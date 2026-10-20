@@ -4,7 +4,7 @@ import os
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import FastAPI, Header, Response
+from fastapi import FastAPI, File, Form, Header, Response, UploadFile
 from fastapi.responses import JSONResponse
 from shared.contracts import (
     DiagnosisAccepted,
@@ -12,6 +12,12 @@ from shared.contracts import (
     ErrorBody,
     ErrorEnvelope,
     ServiceHealth,
+)
+from shared.image_upload import (
+    ImageUploadError,
+    MAX_IMAGE_BYTES,
+    RequestBodyLimitMiddleware,
+    validate_image,
 )
 
 SERVICE_NAME = "api-gateway"
@@ -23,6 +29,7 @@ app = FastAPI(
     version="1.0.0",
     description="The single public API entry point for SnapLens AI.",
 )
+app.add_middleware(RequestBodyLimitMiddleware)
 
 
 async def _orchestrator_ready() -> bool:
@@ -35,7 +42,10 @@ async def _orchestrator_ready() -> bool:
 
 
 async def _forward_diagnosis(
-    body: DiagnosisRequest, request_id: UUID
+    body: DiagnosisRequest,
+    request_id: UUID,
+    content_type: str | None,
+    content: bytes,
 ) -> httpx.Response:
     async with httpx.AsyncClient(
         base_url=ORCHESTRATOR_URL,
@@ -43,7 +53,15 @@ async def _forward_diagnosis(
     ) as client:
         return await client.post(
             "/internal/v1/diagnoses",
-            json=body.model_dump(mode="json"),
+            data={"question": body.question}
+            | ({"session_id": str(body.session_id)} if body.session_id else {}),
+            files={
+                "image": (
+                    "upload",
+                    content,
+                    content_type or "application/octet-stream",
+                )
+            },
             headers={"X-Request-ID": str(request_id)},
         )
 
@@ -65,16 +83,41 @@ async def ready(response: Response) -> ServiceHealth:
     "/v1/diagnoses",
     response_model=DiagnosisAccepted,
     status_code=202,
-    responses={502: {"model": ErrorEnvelope}, 504: {"model": ErrorEnvelope}},
+    responses={
+        413: {"model": ErrorEnvelope},
+        415: {"model": ErrorEnvelope},
+        422: {"model": ErrorEnvelope},
+        502: {"model": ErrorEnvelope},
+        504: {"model": ErrorEnvelope},
+    },
     tags=["diagnoses"],
 )
 async def create_diagnosis(
-    body: DiagnosisRequest,
+    question: str = Form(..., min_length=1, max_length=2000),
+    session_id: UUID | None = Form(default=None),
+    image: UploadFile = File(...),
     x_request_id: UUID | None = Header(default=None, alias="X-Request-ID"),
 ) -> DiagnosisAccepted | JSONResponse:
     request_id = x_request_id or uuid4()
+    body = DiagnosisRequest(question=question, session_id=session_id)
+    content_type = image.content_type
+    content = await image.read(MAX_IMAGE_BYTES + 1)
+    await image.close()
     try:
-        result = await _forward_diagnosis(body, request_id)
+        validate_image(content_type, content)
+    except ImageUploadError as error:
+        return JSONResponse(
+            status_code=error.status_code,
+            content=ErrorEnvelope(
+                error=ErrorBody(
+                    code=error.code,
+                    message=error.message,
+                    request_id=request_id,
+                )
+            ).model_dump(mode="json"),
+        )
+    try:
+        result = await _forward_diagnosis(body, request_id, content_type, content)
     except httpx.TimeoutException:
         return JSONResponse(
             status_code=504,

@@ -2,7 +2,7 @@
 
 **AI-powered visual troubleshooting assistant | Multimodal Vision · Live Web-RAG · Agentic AI**
 
-> **Current milestone:** The backend service foundation is in place. The API Gateway and Orchestrator have a working local HTTP path, and all service skeletons expose health checks. Diagnosis responses are placeholders; AI providers, persistence, and the mobile app are not implemented yet. Docker configuration is included for later use.
+> **Current milestone:** The Gateway accepts and validates JPEG, PNG, and WebP diagnosis images up to 10 MiB, then forwards them transiently to the Orchestrator. The Orchestrator validates them again; images are not retained after the request. The diagnosis response remains a placeholder while AI providers, persistence, and the mobile app are not implemented. Docker configuration is included for later use.
 
 SnapLens AI is a cross-platform mobile application designed to turn a smartphone camera into an intelligent troubleshooting assistant. Users photograph equipment, appliances, electronics, or visible error codes; the system identifies relevant details, retrieves current technical information, and produces evidence-grounded, step-by-step guidance.
 
@@ -95,7 +95,7 @@ flowchart TD
 ## End-to-End Workflow
 
 1. **Capture:** The mobile app captures an image and optional question or voice input.
-2. **Validate:** The backend checks media type, size, access rights, and request constraints.
+2. **Validate:** The backend checks image type, file signature, size, and request constraints.
 3. **Understand:** A multimodal model extracts device identity, visible text, and potential error codes.
 4. **Clarify:** If the identity is ambiguous, the user is asked to confirm the model or capture another image.
 5. **Retrieve:** The search layer finds relevant official manuals, manufacturer pages, and other sources.
@@ -194,12 +194,12 @@ Check Gateway readiness and send a sample request from another PowerShell termin
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health/ready
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/v1/diagnoses `
-  -ContentType 'application/json' `
-  -Body '{"question":"What does this error code mean?"}'
+curl.exe -X POST http://127.0.0.1:8000/v1/diagnoses `
+  -F "question=What does this error code mean?" `
+  -F "image=@sample.png"
 ```
 
-The expected response has `status: accepted` and says that the workflow is not implemented yet. Press **Ctrl+C** in each service terminal to stop it.
+The expected response has `status: accepted` and says that the workflow is not implemented yet. Use a local JPEG, PNG, or WebP image no larger than 10 MiB for `sample.png`. Press **Ctrl+C** in each service terminal to stop it.
 
 ### Run tests
 

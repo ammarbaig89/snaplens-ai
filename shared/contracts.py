@@ -12,7 +12,7 @@ class ContractModel(BaseModel):
 
 
 class DiagnosisRequest(ContractModel):
-    """Text-first diagnosis request; media upload is added in a later milestone."""
+    """Non-file fields carried alongside the diagnosis image upload."""
 
     question: str = Field(min_length=1, max_length=2000)
     session_id: UUID | None = None
