@@ -9,7 +9,7 @@
 4. Do not commit `.env`, paste API keys into source files, or put provider keys
    in the mobile app.
 
-The API Gateway, Orchestrator, and Vision Service load the root `.env` file
+The API Gateway, Orchestrator, Vision Service, and Retrieval Service load the root `.env` file
 through `shared/config.py`. Environment variables already provided by the
 operating system or container take precedence. Docker Compose also passes the
 Vision settings to its container; running Docker is optional for this phase.
@@ -27,10 +27,18 @@ Vision settings to its container; running Docker is optional for this phase.
 | `GEMINI_API_KEY` | Vision Service | Private Google AI Studio key; required only for Gemini mode | empty in template |
 | `GEMINI_MODEL` | Vision Service | Gemini model identifier | `gemini-3.8-flash` |
 | `GEMINI_API_BASE_URL` | Vision Service | Gemini API base URL | `https://generativelanguage.googleapis.com/v1beta` |
+| `RETRIEVAL_PROVIDER` | Retrieval Service | Selects `mock` or `tavily` | `mock` |
+| `RETRIEVAL_PROVIDER_TIMEOUT_SECONDS` | Retrieval Service | Maximum wait for a search provider response | `15` |
+| `RETRIEVAL_MAX_SNIPPET_CHARS` | Retrieval Service | Maximum characters returned for each source excerpt | `4000` |
+| `TAVILY_API_KEY` | Retrieval Service | Private Tavily API key; required only for Tavily mode | empty in template |
+| `TAVILY_API_BASE_URL` | Retrieval Service | Tavily API address | `https://api.tavily.com` |
+| `TAVILY_SEARCH_DEPTH` | Retrieval Service | Search depth/latency choice | `basic` |
 
-The mock provider is the safe default: it makes no external calls and reports
-that it did not analyze the image. Gemini mode is not ready until a key is
-configured. Never add a real key to `.env.example` or GitHub.
+The mock Vision provider is the safe default: it makes no external calls and
+reports that it did not analyze the image. The Retrieval mock provider is also
+offline and returns no sources. Gemini and Tavily modes require their server-
+side keys and are not ready until configured. Never add a real key to
+`.env.example` or GitHub.
 
 ## Reserved for later phases
 
@@ -42,9 +50,6 @@ all read by application code yet.
 | `APP_ENV`, `LOG_LEVEL` | Standardized environment and logging configuration | Reliability |
 | `VISION_SERVICE_URL` | Orchestrator-to-Vision address | Orchestrator integration |
 | `RETRIEVAL_SERVICE_URL` | Orchestrator-to-Retrieval address | Retrieval / Orchestrator |
-| `RETRIEVAL_PROVIDER` | Select mock or Tavily provider | Retrieval |
-| `TAVILY_API_KEY` | Private Tavily API key | Retrieval |
-| `TAVILY_API_BASE_URL` | Tavily API address | Retrieval |
 | `ANSWER_PROVIDER` | Answer synthesis provider | Orchestrator |
 | `ANSWER_MODEL` | Answer synthesis model | Orchestrator |
 | `SESSION_SERVICE_URL` | Orchestrator-to-Session address | Persistence |

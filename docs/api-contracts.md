@@ -97,10 +97,23 @@ provider timeouts, provider outages, and malformed provider output. Its
 
 ### Retrieval
 
-The request carries a search query, optional manufacturer and model, and a
-bounded result limit. Each source has a stable ID, HTTP(S) URL, title, optional
-publisher, extracted snippet, retrieval score, and retrieval timestamp. Later
-answer synthesis must cite returned source IDs and must not make up references.
+`POST /internal/v1/retrieval/searches` accepts JSON matching
+`RetrievalSearchRequest`: a request UUID, a 1–1000 character query, optional
+manufacturer and model, and a result limit from 1 to 10. The provider query
+combines the question with supplied device details and is capped at 400
+characters.
+
+The response is `RetrievalSearchResponse`. Each result has a generated source
+UUID, validated HTTP(S) URL, title, hostname as publisher, excerpt capped by
+`RETRIEVAL_MAX_SNIPPET_CHARS`, provider relevance score clamped to 0–1, and a
+UTC retrieval timestamp. Invalid or incomplete links are skipped. The mock
+provider returns an empty result list rather than sample citations. Tavily is
+enabled with `RETRIEVAL_PROVIDER=tavily` and the server-side `TAVILY_API_KEY`.
+The service bounds provider time, result count, and excerpt size and returns a
+safe error envelope for missing configuration, timeouts, upstream failures,
+and malformed output. Search results include a provider excerpt; page and PDF
+extraction is a separate later capability. Answer synthesis must cite only
+source IDs and URLs returned by this endpoint.
 
 ### Session history
 

@@ -77,23 +77,26 @@ Mock mode and provider failure paths are testable offline; live Gemini is
 verified separately after a key is configured. Orchestrator integration is in
 Phase 4.
 
-## Phase 3 — Retrieval Service (**NEXT**)
+## Phase 3 — Retrieval Service (**IMPLEMENTED; live verification pending key**)
 
 **Goal:** Find useful support information and preserve links for citations.
 
-- [ ] Define a provider-neutral retrieval interface and bounded result contract.
-- [ ] Add a mock search provider for tests.
-- [ ] Integrate Tavily using a local secret; never commit the key.
-- [ ] Build a search query from the question and Vision’s device details.
-- [ ] Return source title, URL, excerpt, publisher when available, and retrieval
+- [x] Define a provider-neutral retrieval interface and bounded result contract.
+- [x] Add a mock search provider for tests; it returns no fabricated sources.
+- [x] Integrate Tavily using a local secret; never commit the key.
+- [x] Build a search query from the question and optional device details.
+- [x] Return source title, URL, excerpt, publisher when available, and retrieval
   time.
-- [ ] Add timeouts, safe error responses, and tests for empty or failed searches.
+- [x] Add timeouts, safe error responses, and tests for empty or failed searches.
 - [ ] Add page and PDF text extraction as a separate, tested capability.
+- [ ] Verify a live Tavily request after the user supplies a key in the local
+  ignored `.env` file.
 
 **Done when:** Retrieval returns a small, relevant set of traceable sources and
-does not invent source links.
+does not invent source links. The mock path and failure paths are covered
+offline; live Tavily is verified separately after a key is configured.
 
-## Phase 4 — Diagnostic Orchestrator and cited answer
+## Phase 4 — Diagnostic Orchestrator and cited answer (**NEXT**)
 
 **Goal:** Connect Vision and Retrieval into one useful backend diagnosis.
 
@@ -204,11 +207,14 @@ depend on it.
 
 ## Current progress snapshot
 
-- **Completed:** Project foundation, Gateway image intake, and the Vision
-  Service with mock and configurable Gemini providers.
+- **Completed:** Project foundation, Gateway image intake, Vision Service with
+  mock and configurable Gemini providers, and Retrieval Service with mock and
+  configurable Tavily providers.
 - **Current implementation:** Vision can be called directly; the Orchestrator
-  does not call it yet, so the public diagnosis endpoint is still a placeholder.
-- **Next target:** Retrieval Service and its mock/Tavily provider boundary.
+  does not call Vision or Retrieval yet, so the public diagnosis endpoint is
+  still a placeholder. Page/PDF extraction and live provider checks remain.
+- **Next target:** Connect the Orchestrator to Vision and Retrieval and return a
+  cited answer from the first LangGraph workflow.
 - **Deferred:** PostgreSQL, Redis, Docker execution, mobile app, voice, AR, and
   offline support until their phases.
 

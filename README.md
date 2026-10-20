@@ -23,7 +23,7 @@ SnapLens AI is a cross-platform mobile application designed to turn a smartphone
 | Capability | Description | Status |
 | :--- | :--- | :--- |
 | **Image-based device identification** | Multimodal analysis of photos and visible labels | Vision Service implemented; Orchestrator integration next |
-| **Live Web-RAG** | Search, extract, rank, and ground answers in retrieved sources | Planned |
+| **Live Web-RAG** | Search, extract, rank, and ground answers in retrieved sources | Retrieval Service with mock and Tavily providers; extraction and orchestration next |
 | **Diagnostic orchestration** | Conditional workflows, clarification questions, and session state | Service scaffold; workflow planned |
 | **Mobile client** | Cross-platform camera, results, history, and voice interfaces | Planned |
 | **Voice assistance** | Speech input, transcription, and spoken responses | Planned |
@@ -114,8 +114,8 @@ flowchart TD
 | **0** | Architecture decisions, repository, service contracts | Complete |
 | **1** | Local FastAPI foundation and Gateway-to-Orchestrator path | Foundation complete; authentication, persistence, and media handling remain |
 | **2** | Vision analysis, structured identification, OCR/error-code extraction | Provider service ready; live Gemini verification needs a key |
-| **3** | Live Web-RAG, manuals/PDF extraction, source ranking, cited synthesis |
-| **4** | LangGraph orchestration, diagnostic state, follow-up conversations |
+| **3** | Retrieval Service with bounded mock/Tavily results; page/PDF extraction remains |
+| **4** | LangGraph orchestration, connect Vision and Retrieval, cited answer (**next**) |
 | **5** | React Native mobile application and full backend integration |
 | **6** | Voice input/output and real-time interaction |
 | **7** | AR overlays and compatible-device tracking |
@@ -175,7 +175,7 @@ which settings are active and which are reserved for later phases.
 
 ### Run the backend locally
 
-Open three PowerShell terminals at the repository root. In each terminal, set the shared contracts path:
+Open four PowerShell terminals at the repository root. In each terminal, set the shared contracts path:
 
 ```powershell
 $repo = (Resolve-Path .).Path
@@ -196,7 +196,18 @@ Set-Location (Join-Path $repo 'services\vision-service')
 & (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8002
 ```
 
-In the third terminal, start the API Gateway:
+In the third terminal, start the Retrieval Service:
+
+```powershell
+Set-Location (Join-Path $repo 'services\retrieval-service')
+& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8003
+```
+
+The Retrieval Service defaults to the offline mock provider and returns no
+sources. To use Tavily, set `RETRIEVAL_PROVIDER=tavily` and add `TAVILY_API_KEY`
+to the ignored root `.env` file.
+
+In the fourth terminal, start the API Gateway:
 
 ```powershell
 $env:ORCHESTRATOR_URL = 'http://127.0.0.1:8001'
@@ -214,14 +225,22 @@ curl.exe -X POST http://127.0.0.1:8000/v1/diagnoses `
 ```
 
 The public diagnosis response is still a placeholder until the Orchestrator is
-connected to Vision and Retrieval. You can call the Vision Service directly to
-try its mock result:
+connected to Vision and Retrieval. You can call Vision directly to try its mock
+result:
 
 ```powershell
 curl.exe -X POST http://127.0.0.1:8002/internal/v1/vision/analyses `
   -F "request_id=550e8400-e29b-41d4-a716-446655440000" `
   -F "question=Read the visible error code" `
   -F "image=@sample.png"
+```
+
+Call Retrieval directly to check its mock response:
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:8003/internal/v1/retrieval/searches `
+  -ContentType 'application/json' `
+  -Body '{"request_id":"550e8400-e29b-41d4-a716-446655440000","query":"How to resolve error E21?","manufacturer":"Acme","model":"WM-100","limit":5}'
 ```
 
 The mock response says no real analysis was performed. Use a local JPEG, PNG,

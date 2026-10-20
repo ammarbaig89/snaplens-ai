@@ -5,6 +5,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY shared /app/shared
 COPY services/retrieval-service/main.py /app/main.py
+COPY services/retrieval-service/retrieval_providers.py /app/retrieval_providers.py
 RUN addgroup --system app && adduser --system --ingroup app app
 USER app
 EXPOSE 8003
