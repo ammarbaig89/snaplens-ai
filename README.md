@@ -229,6 +229,8 @@ The remaining services can be started the same way from their `services/<service
 
 The architecture blueprint and API contracts are documented in [`docs/`](docs/). Database schemas and operational runbooks will be added as those features are implemented.
 
+- [Project roadmap and progress checklist](docs/PROJECT-ROADMAP.md)
+
 ---
 
 ## Contributing and License
