@@ -16,7 +16,7 @@ from shared.contracts import RetrievalSearchResponse, VisionAnalysisResponse
 class AnswerSettings:
     provider: str = "mock"
     api_key: str = ""
-    model: str = "gemini-3.8-flash"
+    model: str = "gemini-3.1-flash-lite"
     api_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     timeout_seconds: float = 30.0
     max_output_tokens: int = 1024
@@ -26,7 +26,7 @@ class AnswerSettings:
         settings = cls(
             provider=os.getenv("ANSWER_PROVIDER", "mock").strip().lower(),
             api_key=os.getenv("GEMINI_API_KEY", "").strip(),
-            model=os.getenv("ANSWER_MODEL", "gemini-3.8-flash").strip(),
+            model=os.getenv("ANSWER_MODEL", "gemini-3.1-flash-lite").strip(),
             api_base_url=os.getenv(
                 "GEMINI_API_BASE_URL",
                 "https://generativelanguage.googleapis.com/v1beta",

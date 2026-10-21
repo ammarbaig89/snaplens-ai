@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "SnapLens AI",
+    "slug": "snaplens-ai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E8F1FF"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SnapLens uses your selected photo to help identify a device or error code.",
+          "cameraPermission": "SnapLens uses your camera to take a troubleshooting photo.",
+          "microphonePermission": false
+        }
+      ]
+    ]
+  }
+}

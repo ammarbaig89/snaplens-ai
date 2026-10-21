@@ -4,13 +4,14 @@
 
 1. Copy `.env.example` to `.env` at the repository root.
 2. Leave `VISION_PROVIDER=mock` for development and automated tests.
-3. When you have a Gemini key, put it only in the ignored `.env` file and set
-   `VISION_PROVIDER=gemini`.
+3. Put the Gemini key only in the ignored `.env` file. When deliberately
+   testing live Vision, set `VISION_PROVIDER=gemini`.
 4. Keep `RETRIEVAL_PROVIDER=mock` while developing. Set it to `tavily` only
    when you intentionally want to make a live search request; each diagnosis
    then uses Tavily.
-5. Keep `ANSWER_PROVIDER=mock` unless you have configured Gemini and want live
-   answer synthesis.
+5. Keep `ANSWER_PROVIDER=mock` during routine development. Set it to `gemini`
+   when you intentionally want a source-grounded live answer. Gemini answer
+   synthesis is skipped when Retrieval returns no sources.
 6. Do not commit `.env`, paste API keys into source files, or put provider keys
    in the mobile app.
 
@@ -42,9 +43,10 @@ passes the service settings into containers; running Docker remains optional.
 | `TAVILY_API_BASE_URL` | Retrieval Service | Tavily API address | `https://api.tavily.com` |
 | `TAVILY_SEARCH_DEPTH` | Retrieval Service | Search depth/latency choice | `basic` |
 | `ANSWER_PROVIDER` | Orchestrator | Selects `mock` or `gemini` | `mock` |
-| `ANSWER_MODEL` | Orchestrator | Gemini answer-synthesis model | `gemini-3.8-flash` |
+| `ANSWER_MODEL` | Orchestrator | Gemini answer-synthesis model | `gemini-3.1-flash-lite` |
 | `ANSWER_PROVIDER_TIMEOUT_SECONDS` | Orchestrator | Maximum answer provider wait | `30` |
 | `ANSWER_MAX_OUTPUT_TOKENS` | Orchestrator | Bounds synthesized answer size | `1024` |
+| `EXPO_PUBLIC_API_BASE_URL` | Expo mobile app | Public API Gateway URL included in the client bundle | `http://10.0.2.2:8000` for Android emulator |
 
 The mock Vision provider is the safe default: it makes no external calls and
 reports that it did not analyze the image. The Retrieval mock provider is also
@@ -52,6 +54,11 @@ offline and returns no sources. The mock answer provider makes no model calls
 and asks for clarification instead of inventing repair steps. Gemini and
 Tavily modes require their server-side keys and are not ready until configured.
 Never add a real key to `.env.example` or GitHub.
+
+The current local `.env` selects Gemini Vision (`gemini-3.8-flash`) and Gemini
+answer synthesis (`gemini-3.1-flash-lite`) with the same key, while keeping
+Retrieval set to `mock` to preserve Tavily credits. These are local settings
+only; `.env.example` contains empty key placeholders and mock defaults.
 
 ## Reserved for later phases
 
@@ -67,7 +74,6 @@ all read by application code yet.
 | `REDIS_URL` | Redis connection | Deferred; add only for a clear need |
 | `OTEL_SERVICE_NAME` | OpenTelemetry service identity | Reliability |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry collector | Reliability |
-| `EXPO_PUBLIC_API_URL` | Public backend address for Expo | Mobile app |
 
 ## Secret handling
 

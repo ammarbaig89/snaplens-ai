@@ -25,7 +25,7 @@ SnapLens AI is a cross-platform mobile application designed to turn a smartphone
 | **Image-based device identification** | Multimodal analysis of photos and visible labels | Vision Service and Orchestrator flow implemented; live Gemini requires a key |
 | **Live Web-RAG** | Search, extract, rank, and ground answers in retrieved sources | Tavily search, HTML/PDF extraction, source validation, and citations implemented |
 | **Diagnostic orchestration** | Conditional workflows, clarification questions, and session state | LangGraph workflow implemented; mock and configurable Gemini answer providers |
-| **Mobile client** | Cross-platform camera, results, history, and voice interfaces | Planned |
+| **Mobile client** | Cross-platform camera, question, answer, warning, and source interfaces | Expo app implemented in `mobile-app/`; device validation pending |
 | **Voice assistance** | Speech input, transcription, and spoken responses | Planned |
 | **AR guidance** | Visual annotations where device and platform support allow | Research / planned |
 | **Offline fallback** | Limited on-device inference and cached guidance | Research / planned |
@@ -113,10 +113,10 @@ flowchart TD
 | :---: | :--- |
 | **0** | Architecture decisions, repository, service contracts | Complete |
 | **1** | Local FastAPI foundation and Gateway-to-Orchestrator path | Foundation complete; authentication, persistence, and media handling remain |
-| **2** | Vision analysis, structured identification, OCR/error-code extraction | Provider service ready; live Gemini verification needs a key |
+| **2** | Vision analysis, structured identification, OCR/error-code extraction | Provider service ready; live Gemini verification remains |
 | **3** | Retrieval Service, Tavily, bounded results, HTML/PDF extraction | Complete; Tavily live-verified |
-| **4** | LangGraph orchestration, Vision/Retrieval integration, cited answer | Complete in mock mode; Gemini answer needs a key for live verification |
-| **5** | React Native mobile application and full backend integration | **Next** |
+| **4** | LangGraph orchestration, Vision/Retrieval integration, cited answer | Complete in mock mode; source-backed Gemini answer verification remains |
+| **5** | React Native mobile application and full backend integration | Implemented; Android/iOS device validation pending |
 | **6** | Voice input/output and real-time interaction |
 | **7** | AR overlays and compatible-device tracking |
 | **8** | Offline inference and cached guidance |
@@ -136,6 +136,7 @@ snaplens-ai/
 │   └── session-service/   # Session and conversation history
 ├── shared/
 │   └── contracts.py       # Request and response models used by services
+├── mobile-app/            # Expo / React Native camera and diagnosis client
 ├── docs/                  # Architecture, ADRs, and API contracts
 ├── scripts/               # Local smoke checks
 ├── tests/                 # Backend contract and handler tests
@@ -145,7 +146,7 @@ snaplens-ai/
 └── README.md
 ```
 
-The service folder name identifies the microservice; its `main.py` file is the FastAPI entry point. The mobile app, CI workflows, and production deployment configuration will be added in later phases.
+The service folder name identifies each microservice; its `main.py` file is the FastAPI entry point. The Expo app lives in `mobile-app/` and never contains provider API keys.
 
 ---
 
@@ -155,7 +156,7 @@ The service folder name identifies the microservice; its `main.py` file is the F
 
 - Python 3.12 or newer.
 - Docker is not required for the local backend workflow below.
-- Provider credentials are not required for the default mock Vision provider.
+- Provider credentials are not required when mock providers are selected.
 
 ### Create the Python environment
 
@@ -172,6 +173,13 @@ your private key to the ignored local `.env` file and set
 `VISION_PROVIDER=gemini`. The tracked `.env.example` contains only safe
 placeholders. See [Environment variables](docs/environment-variables.md) for
 which settings are active and which are reserved for later phases.
+
+### Run the Expo mobile app
+
+See [mobile-app setup](mobile-app/README.md) for Node.js requirements, Android
+emulator/phone Gateway addresses, camera permissions, and the client startup
+commands. Keep Gemini and Tavily keys in the backend root `.env`; the Expo app
+only receives the public Gateway URL.
 
 ### Run the backend locally
 

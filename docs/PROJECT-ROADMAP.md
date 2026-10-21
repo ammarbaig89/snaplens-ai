@@ -52,7 +52,7 @@ backend without needing Docker.
 **Done when:** The Gateway safely receives a photo and hands it to the
 Orchestrator. Phase 4 later connects that handoff to the diagnosis workflow.
 
-## Phase 2 — Vision Service (**IMPLEMENTED; live verification pending key**)
+## Phase 2 — Vision Service (**IMPLEMENTED; live verification pending**)
 
 **Goal:** Turn an uploaded image into structured device and error-code details.
 
@@ -69,8 +69,8 @@ Orchestrator. Phase 4 later connects that handoff to the diagnosis workflow.
   never commit the key.
 - [x] Test valid results, unclear images, provider errors, and invalid output.
 - [x] Update the API contract and setup instructions.
-- [ ] Verify a live Gemini request after the user supplies a key in the local
-  ignored `.env` file.
+- [ ] Verify one live Gemini Vision request using the key in the local ignored
+  `.env` file.
 
 **Done when:** A direct service request returns a validated structured result.
 Mock mode and provider failure paths are testable offline; live Gemini is
@@ -111,25 +111,31 @@ and a single live Tavily request have been verified.
 - [x] Add grounding and safety instructions; reject citations not returned by
   Retrieval and avoid unsupported or hazardous repair instructions.
 - [x] Add integration tests with mocked Vision, Retrieval, and answer providers.
-- [ ] Verify live Gemini answer synthesis after the user configures a Gemini key.
+- [ ] Verify one live, source-backed Gemini answer after the user configures a
+  Gemini key and intentionally enables Tavily or another real source provider.
 
 **Done when:** One photo-and-question request returns a useful, cited answer, or
 clearly asks the user for more information.
 
-## Phase 5 — First mobile experience (**NEXT**)
+## Phase 5 — First mobile experience (**IMPLEMENTED; DEVICE CHECK PENDING**)
 
 **Goal:** Let a user try the core flow on a phone.
 
-- [ ] Add an Expo / React Native TypeScript app in its own clearly named folder.
-- [ ] Configure the API base URL for local development and deployed use.
-- [ ] Add camera permissions and image capture or selection.
-- [ ] Add a question field and submit the multipart request to the Gateway.
-- [ ] Show loading, validation, network error, and retry states.
-- [ ] Display the answer, warnings, and tappable source links.
+- [x] Add an Expo / React Native TypeScript app in its own clearly named folder.
+- [x] Configure the API base URL for local development and deployed use.
+- [x] Add camera permissions and image capture or selection.
+- [x] Add a question field and submit the multipart request to the Gateway.
+- [x] Show loading, validation, network error, and retry states.
+- [x] Display the answer, warnings, and tappable source links.
 - [ ] Test on at least one Android or iOS device/emulator and document setup.
 
 **Done when:** A user can capture a photo, ask a question, and read the answer
 and sources in the app.
+
+**Implementation note:** Source and setup instructions are in `mobile-app/`.
+Physical-device or emulator validation remains open because this workspace has
+no Android emulator tooling attached; follow the setup guide to perform that
+last check with Expo Go or an emulator.
 
 ## Phase 6 — Conversation history and data storage (**DEFERRED**)
 
@@ -214,13 +220,16 @@ depend on it.
   Retrieval Service including HTML/PDF extraction, and the LangGraph diagnosis
   flow through Vision and Retrieval.
 - **Current implementation:** The public diagnosis endpoint returns a cited
-  result or a clarification request. Mock mode is safe for local work; Tavily
-  was verified once. Live Gemini synthesis remains unverified until a Gemini
-  key is configured.
-- **Next target:** Phase 5, build the Expo mobile app for photo capture,
-  questions, answers, warnings, and source links.
-- **Deferred:** PostgreSQL, Redis, Docker execution, mobile app, voice, AR, and
-  offline support until their phases.
+  result or a clarification request. Mock Retrieval remains enabled to preserve
+  Tavily credits. Gemini Vision and answer synthesis are configured in the
+  ignored local `.env`; live answer synthesis still needs source-backed testing.
+- **Current milestone:** Phase 5 app implementation is complete. The remaining
+  task is to run it on Expo Go or an emulator and verify camera, network, and
+  upload behavior.
+- **Next after Phase 5 device validation:** Phase 6 conversation history and
+  storage remain deferred until database work is approved for the project.
+- **Deferred:** PostgreSQL, Redis, Docker execution, voice, AR, and offline
+  support until their phases.
 
 ## Milestone completion routine
 
