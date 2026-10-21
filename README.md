@@ -2,7 +2,7 @@
 
 **AI-powered visual troubleshooting assistant | Multimodal Vision · Live Web-RAG · Agentic AI**
 
-> **Current milestone:** The Gateway and Vision Service accept validated image uploads up to 10 MiB. The Vision Service has a no-cost mock mode and a configurable Gemini provider. The Orchestrator has not connected the diagnosis flow to Vision yet, so the public diagnosis response remains a placeholder. Images are not retained after request processing. Docker configuration is included for later use.
+> **Current milestone:** The public Gateway now runs a LangGraph workflow through Vision and Retrieval and returns a cited result or a clarification request. Mock providers are the default for no-cost local development. Tavily was live-verified once; keep it in mock mode until you deliberately want a search. Images are transient. Docker execution remains optional.
 
 SnapLens AI is a cross-platform mobile application designed to turn a smartphone camera into an intelligent troubleshooting assistant. Users photograph equipment, appliances, electronics, or visible error codes; the system identifies relevant details, retrieves current technical information, and produces evidence-grounded, step-by-step guidance.
 
@@ -22,9 +22,9 @@ SnapLens AI is a cross-platform mobile application designed to turn a smartphone
 
 | Capability | Description | Status |
 | :--- | :--- | :--- |
-| **Image-based device identification** | Multimodal analysis of photos and visible labels | Vision Service implemented; Orchestrator integration next |
-| **Live Web-RAG** | Search, extract, rank, and ground answers in retrieved sources | Retrieval Service with mock and Tavily providers; extraction and orchestration next |
-| **Diagnostic orchestration** | Conditional workflows, clarification questions, and session state | Service scaffold; workflow planned |
+| **Image-based device identification** | Multimodal analysis of photos and visible labels | Vision Service and Orchestrator flow implemented; live Gemini requires a key |
+| **Live Web-RAG** | Search, extract, rank, and ground answers in retrieved sources | Tavily search, HTML/PDF extraction, source validation, and citations implemented |
+| **Diagnostic orchestration** | Conditional workflows, clarification questions, and session state | LangGraph workflow implemented; mock and configurable Gemini answer providers |
 | **Mobile client** | Cross-platform camera, results, history, and voice interfaces | Planned |
 | **Voice assistance** | Speech input, transcription, and spoken responses | Planned |
 | **AR guidance** | Visual annotations where device and platform support allow | Research / planned |
@@ -114,9 +114,9 @@ flowchart TD
 | **0** | Architecture decisions, repository, service contracts | Complete |
 | **1** | Local FastAPI foundation and Gateway-to-Orchestrator path | Foundation complete; authentication, persistence, and media handling remain |
 | **2** | Vision analysis, structured identification, OCR/error-code extraction | Provider service ready; live Gemini verification needs a key |
-| **3** | Retrieval Service with bounded mock/Tavily results; page/PDF extraction remains |
-| **4** | LangGraph orchestration, connect Vision and Retrieval, cited answer (**next**) |
-| **5** | React Native mobile application and full backend integration |
+| **3** | Retrieval Service, Tavily, bounded results, HTML/PDF extraction | Complete; Tavily live-verified |
+| **4** | LangGraph orchestration, Vision/Retrieval integration, cited answer | Complete in mock mode; Gemini answer needs a key for live verification |
+| **5** | React Native mobile application and full backend integration | **Next** |
 | **6** | Voice input/output and real-time interaction |
 | **7** | AR overlays and compatible-device tracking |
 | **8** | Offline inference and cached guidance |
@@ -185,6 +185,8 @@ $env:PYTHONPATH = $repo
 In the first terminal, start the Diagnostic Orchestrator:
 
 ```powershell
+$env:VISION_SERVICE_URL = 'http://127.0.0.1:8002'
+$env:RETRIEVAL_SERVICE_URL = 'http://127.0.0.1:8003'
 Set-Location (Join-Path $repo 'services\diagnostic-orchestrator')
 & (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8001
 ```
@@ -203,9 +205,10 @@ Set-Location (Join-Path $repo 'services\retrieval-service')
 & (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8003
 ```
 
-The Retrieval Service defaults to the offline mock provider and returns no
-sources. To use Tavily, set `RETRIEVAL_PROVIDER=tavily` and add `TAVILY_API_KEY`
-to the ignored root `.env` file.
+The Retrieval Service uses the offline mock provider by default and returns no
+sources. To intentionally run a live search, set `RETRIEVAL_PROVIDER=tavily` in
+the ignored root `.env` file. A diagnosis with recognizable device details may
+make one Tavily search; unrecognized images skip retrieval to conserve credits.
 
 In the fourth terminal, start the API Gateway:
 
@@ -224,9 +227,9 @@ curl.exe -X POST http://127.0.0.1:8000/v1/diagnoses `
   -F "image=@sample.png"
 ```
 
-The public diagnosis response is still a placeholder until the Orchestrator is
-connected to Vision and Retrieval. You can call Vision directly to try its mock
-result:
+With mock Vision, Retrieval, and Answer providers, the public diagnosis flow
+returns a safe clarification request without external calls. You can call
+Vision directly to try its mock result:
 
 ```powershell
 curl.exe -X POST http://127.0.0.1:8002/internal/v1/vision/analyses `

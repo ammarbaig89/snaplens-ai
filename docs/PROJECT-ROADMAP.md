@@ -49,8 +49,8 @@ backend without needing Docker.
 - [x] Document the API and add validation and handler tests.
 - [x] Commit and push this milestone to `main` (`25fa204`).
 
-**Done when:** The Gateway can safely receive a photo and hand it to the
-Orchestrator. The current response is still a placeholder, not an AI diagnosis.
+**Done when:** The Gateway safely receives a photo and hands it to the
+Orchestrator. Phase 4 later connects that handoff to the diagnosis workflow.
 
 ## Phase 2 — Vision Service (**IMPLEMENTED; live verification pending key**)
 
@@ -77,7 +77,7 @@ Mock mode and provider failure paths are testable offline; live Gemini is
 verified separately after a key is configured. Orchestrator integration is in
 Phase 4.
 
-## Phase 3 — Retrieval Service (**IMPLEMENTED; live verification pending key**)
+## Phase 3 — Retrieval Service (**COMPLETE**)
 
 **Goal:** Find useful support information and preserve links for citations.
 
@@ -88,32 +88,35 @@ Phase 4.
 - [x] Return source title, URL, excerpt, publisher when available, and retrieval
   time.
 - [x] Add timeouts, safe error responses, and tests for empty or failed searches.
-- [ ] Add page and PDF text extraction as a separate, tested capability.
-- [ ] Verify a live Tavily request after the user supplies a key in the local
-  ignored `.env` file.
+- [x] Add page and PDF text extraction as a separate, tested capability.
+- [x] Verify one live Tavily request using the local ignored `.env` key; keep
+  mock mode as the development default to conserve credits.
 
 **Done when:** Retrieval returns a small, relevant set of traceable sources and
-does not invent source links. The mock path and failure paths are covered
-offline; live Tavily is verified separately after a key is configured.
+does not invent source links. Search, extraction, bounded results, error paths,
+and a single live Tavily request have been verified.
 
-## Phase 4 — Diagnostic Orchestrator and cited answer (**NEXT**)
+## Phase 4 — Diagnostic Orchestrator and cited answer (**IMPLEMENTED**)
 
 **Goal:** Connect Vision and Retrieval into one useful backend diagnosis.
 
-- [ ] Pass the transient image from Orchestrator to Vision.
-- [ ] Create the first LangGraph workflow with clear typed state.
-- [ ] Send the user question and Vision result to Retrieval.
-- [ ] Synthesize a step-by-step answer using retrieved evidence.
-- [ ] Return citations that point to the actual retrieved source IDs and URLs.
-- [ ] Include uncertainty and ask for clarification when the image or evidence
+- [x] Pass the transient image from Orchestrator to Vision.
+- [x] Create the first LangGraph workflow with clear typed state.
+- [x] Send the user question and Vision result to Retrieval.
+- [x] Synthesize answers from retrieved evidence with mock and configurable
+  Gemini providers.
+- [x] Return citations that point to the actual retrieved source IDs and URLs.
+- [x] Include uncertainty and ask for clarification when the image or evidence
   is insufficient.
-- [ ] Add safety checks to avoid unsupported or hazardous repair instructions.
-- [ ] Add integration tests with mocked Vision, Retrieval, and answer providers.
+- [x] Add grounding and safety instructions; reject citations not returned by
+  Retrieval and avoid unsupported or hazardous repair instructions.
+- [x] Add integration tests with mocked Vision, Retrieval, and answer providers.
+- [ ] Verify live Gemini answer synthesis after the user configures a Gemini key.
 
 **Done when:** One photo-and-question request returns a useful, cited answer, or
 clearly asks the user for more information.
 
-## Phase 5 — First mobile experience
+## Phase 5 — First mobile experience (**NEXT**)
 
 **Goal:** Let a user try the core flow on a phone.
 
@@ -207,14 +210,15 @@ depend on it.
 
 ## Current progress snapshot
 
-- **Completed:** Project foundation, Gateway image intake, Vision Service with
-  mock and configurable Gemini providers, and Retrieval Service with mock and
-  configurable Tavily providers.
-- **Current implementation:** Vision can be called directly; the Orchestrator
-  does not call Vision or Retrieval yet, so the public diagnosis endpoint is
-  still a placeholder. Page/PDF extraction and live provider checks remain.
-- **Next target:** Connect the Orchestrator to Vision and Retrieval and return a
-  cited answer from the first LangGraph workflow.
+- **Completed:** Project foundation, Gateway image intake, Vision Service,
+  Retrieval Service including HTML/PDF extraction, and the LangGraph diagnosis
+  flow through Vision and Retrieval.
+- **Current implementation:** The public diagnosis endpoint returns a cited
+  result or a clarification request. Mock mode is safe for local work; Tavily
+  was verified once. Live Gemini synthesis remains unverified until a Gemini
+  key is configured.
+- **Next target:** Phase 5, build the Expo mobile app for photo capture,
+  questions, answers, warnings, and source links.
 - **Deferred:** PostgreSQL, Redis, Docker execution, mobile app, voice, AR, and
   offline support until their phases.
 

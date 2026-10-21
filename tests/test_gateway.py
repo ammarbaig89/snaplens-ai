@@ -17,11 +17,12 @@ from starlette.datastructures import Headers, UploadFile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "services" / "diagnostic-orchestrator"))
 sys.path.insert(0, str(ROOT / "services" / "api-gateway"))
 
 import main as gateway  # noqa: E402
 from shared.contracts import (  # noqa: E402
-    DiagnosisAccepted,
+    DiagnosisResult,
     DiagnosisRequest,
     RetrievalSearchRequest,
     SessionMessageAppend,
@@ -98,17 +99,27 @@ class GatewayTests(unittest.TestCase):
             content: bytes,
         ) -> httpx.Response:
             forwarded.append((body, forwarded_id, content))
-            accepted = run_immediate_coroutine(
-                orchestrator.accept_diagnosis(
+            class FakeGraph:
+                def invoke(self, state):
+                    return {
+                        "result": DiagnosisResult(
+                            request_id=state["request_id"],
+                            session_id=state["session_id"],
+                            status="needs_clarification",
+                            answer="Please provide the exact device model.",
+                        )
+                    }
+
+            with patch.object(orchestrator.app.state, "diagnosis_graph", FakeGraph()):
+                diagnosis = orchestrator.accept_diagnosis(
                     question=body.question,
                     session_id=body.session_id,
                     image=self.png_upload(content),
                     x_request_id=forwarded_id,
                 )
-            )
             return httpx.Response(
-                202,
-                json=accepted.model_dump(mode="json"),
+                200,
+                json=diagnosis.model_dump(mode="json"),
                 request=httpx.Request("POST", "http://orchestrator/internal/v1/diagnoses"),
             )
 
@@ -122,12 +133,12 @@ class GatewayTests(unittest.TestCase):
                 )
             )
 
-        self.assertIsInstance(result, DiagnosisAccepted)
+        self.assertIsInstance(result, DiagnosisResult)
         self.assertEqual(result.request_id, request_id)
         self.assertEqual(result.session_id, session_id)
         self.assertEqual(forwarded[0][1], request_id)
         self.assertEqual(forwarded[0][2], b"\x89PNG\r\n\x1a\nfixture")
-        self.assertIn("Image validated", result.message)
+        self.assertIn("exact device model", result.answer)
 
     def test_upload_rejects_mismatched_type_and_oversized_content(self) -> None:
         with self.assertRaises(ImageUploadError) as mismatch:

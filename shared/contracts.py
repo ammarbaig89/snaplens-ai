@@ -18,13 +18,6 @@ class DiagnosisRequest(ContractModel):
     session_id: UUID | None = None
 
 
-class DiagnosisAccepted(ContractModel):
-    request_id: UUID
-    session_id: UUID
-    status: Literal["accepted"] = "accepted"
-    message: str
-
-
 class DeviceIdentification(ContractModel):
     category: str | None = Field(default=None, max_length=120)
     brand: str | None = Field(default=None, max_length=120)
@@ -73,6 +66,23 @@ class RetrievedSource(ContractModel):
 class RetrievalSearchResponse(ContractModel):
     request_id: UUID
     sources: list[RetrievedSource] = Field(default_factory=list, max_length=10)
+
+
+class RetrievalExtractionResponse(ContractModel):
+    request_id: UUID
+    content_type: Literal["application/pdf", "text/html"]
+    text: str = Field(min_length=1, max_length=20000)
+
+
+class DiagnosisResult(ContractModel):
+    request_id: UUID
+    session_id: UUID
+    status: Literal["completed", "needs_clarification"]
+    answer: str = Field(min_length=1, max_length=8000)
+    citations: list[RetrievedSource] = Field(default_factory=list, max_length=10)
+    warnings: list[Annotated[str, Field(max_length=500)]] = Field(
+        default_factory=list, max_length=30
+    )
 
 
 class SessionCreateRequest(ContractModel):

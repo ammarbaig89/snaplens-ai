@@ -6,8 +6,9 @@ from uuid import UUID, uuid4
 import httpx
 from fastapi import FastAPI, File, Form, Header, Response, UploadFile
 from fastapi.responses import JSONResponse
+from shared import config as _config  # noqa: F401
 from shared.contracts import (
-    DiagnosisAccepted,
+    DiagnosisResult,
     DiagnosisRequest,
     ErrorBody,
     ErrorEnvelope,
@@ -22,7 +23,7 @@ from shared.image_upload import (
 
 SERVICE_NAME = "api-gateway"
 ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8001")
-HTTP_TIMEOUT_SECONDS = float(os.getenv("HTTP_TIMEOUT_SECONDS", "5"))
+HTTP_TIMEOUT_SECONDS = float(os.getenv("HTTP_TIMEOUT_SECONDS", "90"))
 
 app = FastAPI(
     title="SnapLens API Gateway",
@@ -34,7 +35,7 @@ app.add_middleware(RequestBodyLimitMiddleware)
 
 async def _orchestrator_ready() -> bool:
     try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=min(HTTP_TIMEOUT_SECONDS, 3.0)) as client:
             result = await client.get(f"{ORCHESTRATOR_URL}/health/ready")
         return result.status_code == 200
     except httpx.HTTPError:
@@ -81,8 +82,7 @@ async def ready(response: Response) -> ServiceHealth:
 
 @app.post(
     "/v1/diagnoses",
-    response_model=DiagnosisAccepted,
-    status_code=202,
+    response_model=DiagnosisResult,
     responses={
         413: {"model": ErrorEnvelope},
         415: {"model": ErrorEnvelope},
@@ -97,7 +97,7 @@ async def create_diagnosis(
     session_id: UUID | None = Form(default=None),
     image: UploadFile = File(...),
     x_request_id: UUID | None = Header(default=None, alias="X-Request-ID"),
-) -> DiagnosisAccepted | JSONResponse:
+) -> DiagnosisResult | JSONResponse:
     request_id = x_request_id or uuid4()
     body = DiagnosisRequest(question=question, session_id=session_id)
     content_type = image.content_type
@@ -147,9 +147,9 @@ async def create_diagnosis(
             content=ErrorEnvelope(
                 error=ErrorBody(
                     code="UPSTREAM_FAILURE",
-                    message="The diagnostic service could not accept the request.",
+                    message="The diagnostic service could not complete the request.",
                     request_id=request_id,
                 )
             ).model_dump(mode="json"),
         )
-    return DiagnosisAccepted.model_validate(result.json())
+    return DiagnosisResult.model_validate(result.json())

@@ -60,22 +60,21 @@ def main() -> int:
             session_id,
             request_id,
         )
-        if status != 202:
-            raise RuntimeError(f"Expected HTTP 202, received {status}: {result}")
+        if status != 200:
+            raise RuntimeError(f"Expected HTTP 200, received {status}: {result}")
         if (
-            result.get("status") != "accepted"
+            result.get("status") not in {"completed", "needs_clarification"}
             or result.get("session_id") != session_id
             or result.get("request_id") != request_id
+            or not result.get("answer")
         ):
-            raise RuntimeError(f"Unexpected diagnosis acknowledgement: {result}")
-        if "Image validated" not in str(result.get("message", "")):
-            raise RuntimeError("Expected an explicit placeholder acknowledgement")
+            raise RuntimeError(f"Unexpected diagnosis result: {result}")
 
         print("Gateway health checks passed.")
-        print("Gateway-to-Orchestrator image upload passed.")
+        print("Gateway-to-Orchestrator-to-Vision-to-Retrieval workflow passed.")
         print(f"Request ID: {request_id}")
         print(f"Session ID: {session_id}")
-        print("The response is a scaffold acknowledgement, not a diagnosis.")
+        print(f"Diagnosis status: {result['status']}.")
         return 0
     except (HTTPError, URLError, TimeoutError, RuntimeError, ValueError) as exc:
         print(f"SnapLens Compose smoke check failed: {exc}")

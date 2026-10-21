@@ -31,14 +31,16 @@ the multipart parser processes them. The image is not retained after the
 request; FastAPI may use a temporary spooled file while processing an upload.
 Clients may send an `X-Request-ID` UUID; otherwise the Gateway creates one.
 
-Accepted response (`202`):
+Diagnosis result (`200`):
 
 ```json
 {
   "request_id": "550e8400-e29b-41d4-a716-446655440000",
   "session_id": "550e8400-e29b-41d4-a716-446655440001",
-  "status": "accepted",
-  "message": "Image validated. The diagnostic workflow is not implemented yet."
+  "status": "needs_clarification",
+  "answer": "I couldn't find verified support information for this request. Please share the device's make and model or a clearer photo of its label.",
+  "citations": [],
+  "warnings": ["No verified support sources were found; no repair steps were generated."]
 }
 ```
 
@@ -62,9 +64,10 @@ responses to `502`.
 
 | Caller | Method and path | Receiver | Request → response | Purpose |
 |---|---|---|---|---|
-| Gateway | `POST /internal/v1/diagnoses` | Diagnostic Orchestrator | Multipart `question`, optional `session_id`, and `image` → `DiagnosisAccepted` | Forward validated image bytes and request ID; no permanent image storage |
+| Gateway | `POST /internal/v1/diagnoses` | Diagnostic Orchestrator | Multipart `question`, optional `session_id`, and `image` → `DiagnosisResult` | Run transient image analysis, retrieval, and answer synthesis |
 | Orchestrator | `POST /internal/v1/vision/analyses` | Vision Service | Multipart `request_id`, optional `question`, and `image` → `VisionAnalysisResponse` | Analyze transient image bytes |
 | Orchestrator | `POST /internal/v1/retrieval/searches` | Retrieval Service | `RetrievalSearchRequest` → `RetrievalSearchResponse` | Find supporting source material |
+| Internal caller | `POST /internal/v1/retrieval/extractions` | Retrieval Service | Multipart `request_id` and `document` → `RetrievalExtractionResponse` | Extract bounded text from uploaded HTML/PDF bytes without fetching URLs |
 | Orchestrator | `POST /internal/v1/sessions` | Session Service | `SessionCreateRequest` → `SessionRecord` | Start a diagnostic session |
 | Orchestrator | `GET /internal/v1/sessions/{session_id}` | Session Service | — → `SessionRecord` | Read session metadata |
 | Orchestrator | `POST /internal/v1/sessions/{session_id}/messages` | Session Service | `SessionMessageAppend` → `SessionMessageRecord` | Persist a conversation turn |
@@ -112,8 +115,23 @@ enabled with `RETRIEVAL_PROVIDER=tavily` and the server-side `TAVILY_API_KEY`.
 The service bounds provider time, result count, and excerpt size and returns a
 safe error envelope for missing configuration, timeouts, upstream failures,
 and malformed output. Search results include a provider excerpt; page and PDF
-extraction is a separate later capability. Answer synthesis must cite only
-source IDs and URLs returned by this endpoint.
+extraction is available separately through
+`POST /internal/v1/retrieval/extractions`. The extractor accepts PDF or HTML
+bytes up to 10 MiB, excludes script/style text, limits PDF pages to 25, and
+returns at most 20,000 characters. It does not fetch user-supplied URLs. Answer
+synthesis must cite only source IDs and URLs returned by search.
+
+### Diagnostic Orchestrator
+
+`POST /internal/v1/diagnoses` accepts the Gateway's validated multipart request
+and returns `DiagnosisResult` with `completed` or `needs_clarification` status,
+an answer, citations copied from Retrieval results, and warnings. A LangGraph
+workflow analyzes the transient image, skips paid retrieval for an image with
+no recognizable details, searches with the question and Vision clues, and only
+returns citations whose IDs are present in the actual retrieval response.
+The default mock answer is deliberately cautious; Gemini synthesis can be
+enabled with `ANSWER_PROVIDER=gemini` and the server-side `GEMINI_API_KEY`.
+Hazardous repair categories are disallowed in the synthesis instructions.
 
 ### Session history
 

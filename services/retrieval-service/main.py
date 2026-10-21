@@ -2,13 +2,14 @@
 
 from uuid import UUID
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, File, Form, Response, UploadFile
 from fastapi.responses import JSONResponse
 
 from shared import config as _config  # noqa: F401
 from shared.contracts import (
     ErrorBody,
     ErrorEnvelope,
+    RetrievalExtractionResponse,
     RetrievalSearchRequest,
     RetrievalSearchResponse,
     ServiceHealth,
@@ -18,6 +19,12 @@ from retrieval_providers import (
     RetrievalSettings,
     create_provider,
 )
+from extractors import (
+    MAX_DOCUMENT_BYTES,
+    DocumentExtractionError,
+    extract_document_text,
+)
+from shared.image_upload import RequestBodyLimitMiddleware
 
 SERVICE_NAME = "retrieval-service"
 SETTINGS = RetrievalSettings.from_env()
@@ -26,6 +33,7 @@ app = FastAPI(
     version="1.0.0",
     description="Searches for bounded, traceable support information.",
 )
+app.add_middleware(RequestBodyLimitMiddleware)
 app.state.retrieval_provider = create_provider(SETTINGS)
 
 
@@ -78,3 +86,33 @@ async def search(
             error.message,
             error.status_code,
         )
+
+
+@app.post(
+    "/internal/v1/retrieval/extractions",
+    response_model=RetrievalExtractionResponse,
+    responses={
+        413: {"model": ErrorEnvelope},
+        415: {"model": ErrorEnvelope},
+        422: {"model": ErrorEnvelope},
+    },
+    tags=["internal"],
+)
+async def extract_document(
+    request_id: UUID = Form(...),
+    document: UploadFile = File(...),
+) -> RetrievalExtractionResponse | JSONResponse:
+    content_type = (document.content_type or "").split(";", 1)[0].strip().lower()
+    content = await document.read(MAX_DOCUMENT_BYTES + 1)
+    await document.close()
+    try:
+        extracted_text = extract_document_text(content, content_type)
+    except DocumentExtractionError as error:
+        return _error_response(
+            request_id, error.code, error.message, error.status_code
+        )
+    return RetrievalExtractionResponse(
+        request_id=request_id,
+        content_type=content_type,
+        text=extracted_text,
+    )

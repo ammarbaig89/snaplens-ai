@@ -5,6 +5,8 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY shared /app/shared
 COPY services/diagnostic-orchestrator/main.py /app/main.py
+COPY services/diagnostic-orchestrator/workflow.py /app/workflow.py
+COPY services/diagnostic-orchestrator/answer_providers.py /app/answer_providers.py
 RUN addgroup --system app && adduser --system --ingroup app app
 USER app
 EXPOSE 8001

@@ -5,8 +5,8 @@
 SnapLens uses a microservices monorepo. Each service has a separate application,
 container, health endpoints, and versioned contract. Docker Compose runs the
 services together for local development. Only the API Gateway is public to the
-mobile app. The first milestone proves the Gateway-to-Orchestrator path; AI
-providers and business workflows are added in later milestones.
+mobile app. The first end-to-end backend flow runs locally without Docker or
+provider keys by using mock Vision, Retrieval, and Answer providers.
 
 ```mermaid
 flowchart LR
@@ -24,9 +24,9 @@ flowchart LR
 | Service | Owns | Public to mobile? | First milestone |
 |---|---|---:|---|
 | API Gateway | Client API, request IDs, validation boundary, routing, stable upstream errors | Yes | Diagnosis request route and Orchestrator readiness |
-| Diagnostic Orchestrator | Workflow state and calls to specialist services | No | Accepts a diagnosis request; LangGraph comes later |
-| Vision Service | Image interpretation and structured identification | No | Multipart analysis endpoint; mock and configurable Gemini providers |
-| Retrieval Service | Search, extraction, ranking, and source metadata | No | Health endpoints; Tavily integration later |
+| Diagnostic Orchestrator | LangGraph state, service calls, safety, and cited answers | No | Typed image → retrieval → answer workflow |
+| Vision Service | Image interpretation and structured identification | No | Multipart analysis; mock and configurable Gemini providers |
+| Retrieval Service | Web search, HTML/PDF text extraction, and source metadata | No | Mock and configurable Tavily search; bounded upload extraction |
 | Session Service | Diagnostic session and conversation history | No | Health endpoints; database persistence later |
 | PostgreSQL | Durable relational state | No | Local persistent volume |
 | Redis | Short-lived state and cache | No | Local persistent volume |
@@ -42,13 +42,15 @@ their own data through their owner rather than querying another service's tables
    Gateway.
 2. The Gateway validates the request, creates or preserves an `X-Request-ID`,
    and forwards the multipart request to the Orchestrator.
-3. The Vision Service can be called directly at
-   `POST /internal/v1/vision/analyses`; it validates and analyzes the transient
-   image using the configured provider.
-4. The Orchestrator-to-Vision and Retrieval workflow is not connected yet. The
-   Orchestrator currently returns an accepted placeholder, which must not be
-   presented as an AI diagnosis.
-5. The Gateway returns the accepted response to the client.
+3. The Orchestrator sends the transient image to Vision and the question plus
+   visible device/error details to Retrieval.
+4. The Orchestrator synthesizes a response using retrieved evidence, returns
+   citations tied to actual source IDs, or asks for clarification.
+5. The Gateway returns the `DiagnosisResult` to the client.
+
+Retrieval can extract text from uploaded HTML and PDF bytes through its
+internal extraction endpoint. It does not fetch arbitrary URLs, which keeps
+the capability separate from SSRF-prone URL fetching.
 
 All HTTP paths are versioned. Shared Pydantic models live in
 `shared/contracts.py`. Internal endpoints use the `/internal/` prefix and are
@@ -58,26 +60,26 @@ and does not leak internal exception details.
 
 ## Operational boundaries
 
-- Every service exposes `/health/live` and `/health/ready`. Vision readiness
-  fails when Gemini is selected without a configured key.
-- Gateway readiness also checks the Orchestrator dependency.
+- Every service exposes `/health/live` and `/health/ready`. Provider readiness
+  fails when Gemini or Tavily is selected without its configured key.
+- Orchestrator readiness checks Vision, Retrieval, and the selected answer
+  provider. Gateway readiness checks the Orchestrator.
 - Only the Gateway and the local developer PostgreSQL port are published to the
   host; Redis and internal service ports stay on the Compose network.
 - Compose configuration is for local development. Production secrets must come
   from the deployment environment's secret manager.
 - Logs and traces should carry the request ID; OpenTelemetry is added in a later
   reliability milestone.
-- AI responses must later carry source citations and uncertainty. This scaffold
-  does not generate troubleshooting instructions.
+- The mock Answer provider never invents repair steps. Gemini synthesis is
+  constrained to supplied sources and citations; hazardous repair requests are
+  directed to a qualified technician.
 
 ## Local run
 
-1. Copy `.env.example` to `.env` and set a local PostgreSQL password.
-2. Run `docker compose up --build` from the repository root.
-3. Run `python scripts/smoke-compose.py` to check the Gateway and
-   Gateway-to-Orchestrator HTTP path.
-4. Stop the stack with `docker compose down`. Add `-v` only when you intend to
-   remove local database and Redis data.
+1. Copy `.env.example` to `.env`; mock providers are the default.
+2. Follow the four-service PowerShell workflow in the root README.
+3. Optionally run the documented smoke check with Docker Compose when Docker
+   is part of the development setup.
 
 ## Later extraction and scaling
 
