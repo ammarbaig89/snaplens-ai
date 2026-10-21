@@ -51,11 +51,14 @@ ignored `.env`, where only backend services read them. The image is uploaded to
 the Gateway for this request and the mobile app does not save a server-side
 copy.
 
-To deliberately test the Gemini integration, configure the root `.env` with
-`VISION_PROVIDER=gemini`, `ANSWER_PROVIDER=gemini`, and the Gemini key. Set
-`RETRIEVAL_PROVIDER=mock` to avoid Tavily usage while testing. A completed
-answer requires retrieved sources; with mock Retrieval, the app should show a
-clarification response when no sources are available.
+For a live end-to-end diagnosis, keep `VISION_PROVIDER=gemini` and
+`ANSWER_PROVIDER=gemini`, and set `RETRIEVAL_PROVIDER=tavily` in the ignored
+repository-root `.env`. The Gemini and Tavily keys stay server-side in that file.
+A recognizable device result can trigger one Tavily search; Gemini Vision and
+answer synthesis also make model requests. Unrecognized images can skip search,
+and a completed answer requires retrieved sources. The starter `.env.example`
+remains in mock mode so a fresh clone does not make paid provider requests until
+its owner explicitly enables them.
 
 ## Checks
 

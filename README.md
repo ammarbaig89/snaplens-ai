@@ -223,7 +223,7 @@ In the fourth terminal, start the API Gateway:
 ```powershell
 $env:ORCHESTRATOR_URL = 'http://127.0.0.1:8001'
 Set-Location (Join-Path $repo 'services\api-gateway')
-& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8000
+& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 Check Gateway readiness and send a sample request from another PowerShell terminal:
