@@ -32,6 +32,13 @@ physical phone: it points to the phone itself. Android emulator uses
 `http://10.0.2.2:8000`; the iOS simulator usually uses
 `http://127.0.0.1:8000`.
 
+For a physical Android phone when Windows Firewall blocks Gateway port `8000`,
+use the local Metro proxy instead: set `EXPO_PUBLIC_API_BASE_URL` in
+`mobile-app/.env` to `http://<PC-LAN-IP>:8081`. Metro forwards diagnosis and
+health requests to the Gateway on the PC. Keep Expo running in LAN mode while
+testing. This proxy is for local development and is not used by production
+builds.
+
 For LAN use, start the Gateway so it listens on all interfaces:
 
 ```powershell
