@@ -140,9 +140,21 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isQuestionFocused, setIsQuestionFocused] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const screenOpacity = useRef(new Animated.Value(0)).current;
   const screenOffset = useRef(new Animated.Value(10)).current;
   const heroFloat = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     screenOpacity.setValue(0);
@@ -365,7 +377,7 @@ export default function App() {
           ) : null}
 
           {activeTab === "diagnose" ? (
-            <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="always" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
               <View style={styles.flowTopline}>
                 <Pressable accessibilityRole="button" onPress={() => {
                   if (diagnosisStep === "question") setDiagnosisStep("photo");
@@ -446,11 +458,13 @@ export default function App() {
           ) : null}
         </Animated.View>
 
-        <View style={styles.tabBar}>
-          <TabButton label="Home" icon="⌂" selected={activeTab === "home"} onPress={() => setActiveTab("home")} disabled={isLoading || isPickingPhoto} />
-          <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} prominent disabled={isLoading || isPickingPhoto} />
-          <TabButton label="Guide" icon="✧" selected={activeTab === "guide"} onPress={() => setActiveTab("guide")} disabled={isLoading || isPickingPhoto} />
-        </View>
+        {!keyboardVisible ? (
+          <View style={styles.tabBar}>
+            <TabButton label="Home" icon="⌂" selected={activeTab === "home"} onPress={() => setActiveTab("home")} disabled={isLoading || isPickingPhoto} />
+            <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} prominent disabled={isLoading || isPickingPhoto} />
+            <TabButton label="Guide" icon="✧" selected={activeTab === "guide"} onPress={() => setActiveTab("guide")} disabled={isLoading || isPickingPhoto} />
+          </View>
+        ) : null}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </SafeAreaProvider>

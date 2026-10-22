@@ -183,7 +183,22 @@ only receives the public Gateway URL.
 
 ### Run the backend locally
 
-Open four PowerShell terminals at the repository root. In each terminal, set the shared contracts path:
+Run the backend launcher from the repository root. It opens the Vision,
+Retrieval, Orchestrator, and Gateway services in separate PowerShell windows,
+sets the required local service URLs, and updates the mobile app's public
+Gateway URL to the PC's current LAN address when Windows can detect one:
+
+```powershell
+.\scripts\start-local.ps1
+```
+
+Keep the four service windows open while using the app. Check that the Gateway
+is ready on the PC at `http://127.0.0.1:8000/health/ready`. If the phone still
+cannot connect, confirm the phone and PC are on the same Wi-Fi and allow
+inbound TCP port `8000` through Windows Firewall for the active network.
+
+To start services manually, open four PowerShell terminals at the repository
+root. In each terminal, set the shared contracts path:
 
 ```powershell
 $repo = (Resolve-Path .).Path
