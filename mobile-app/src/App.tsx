@@ -20,19 +20,26 @@ import { MAX_IMAGE_BYTES, MAX_QUESTION_CHARS, SUPPORTED_IMAGE_TYPES } from "./co
 import type { DiagnosisResult, ImageSelection } from "./types";
 
 const colors = {
-  ink: "#152622",
-  muted: "#647570",
-  paper: "#F3F6F1",
+  ink: "#19243A",
+  muted: "#758096",
+  canvas: "#F4F6FA",
   white: "#FFFFFF",
-  green: "#176B52",
-  greenDark: "#103F34",
-  mint: "#E1EFE7",
-  line: "#DCE5DE",
-  soft: "#EBF1EC",
-  amber: "#FFF1D8",
-  amberInk: "#80551A",
-  red: "#A33731",
+  navy: "#17233E",
+  blue: "#4F68E8",
+  blueDark: "#374EC5",
+  blueTint: "#E9EDFF",
+  teal: "#27A997",
+  tealTint: "#E5F6F3",
+  line: "#E5E9F1",
+  soft: "#F8F9FC",
+  amber: "#FFF4DF",
+  amberInk: "#805719",
+  red: "#B44246",
+  redTint: "#FFF0EF",
 };
+
+type Tab = "home" | "diagnose" | "guide";
+type DiagnosisStep = "photo" | "question" | "result";
 
 function friendlyImage(asset: ImagePicker.ImagePickerAsset): ImageSelection | null {
   const fileName = asset.fileName || asset.uri.split("/").pop() || "";
@@ -52,60 +59,78 @@ function friendlyImage(asset: ImagePicker.ImagePickerAsset): ImageSelection | nu
     return null;
   }
   const safeExtension = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
-  return {
-    uri: asset.uri,
-    name: fileName || `snaplens-photo.${safeExtension}`,
-    mimeType,
-    size: asset.fileSize ?? null,
-  };
+  return { uri: asset.uri, name: fileName || `snaplens-photo.${safeExtension}`, mimeType, size: asset.fileSize ?? null };
 }
 
-function ActionButton({
+function PrimaryButton({
   label,
-  hint,
-  icon,
   onPress,
   disabled = false,
+  busy = false,
   secondary = false,
+  icon,
 }: {
   label: string;
-  hint: string;
-  icon: string;
   onPress: () => void;
   disabled?: boolean;
+  busy?: boolean;
   secondary?: boolean;
+  icon?: string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
+      accessibilityState={{ disabled, busy }}
+      disabled={disabled || busy}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.actionButton,
-        secondary && styles.secondaryButton,
-        disabled && styles.disabledButton,
-        pressed && !disabled && styles.pressedButton,
+        styles.button,
+        secondary && styles.buttonSecondary,
+        disabled && styles.buttonDisabled,
+        pressed && !disabled && !busy && styles.buttonPressed,
       ]}
     >
-      <View style={styles.actionIcon}><Text style={[styles.actionIconText, secondary && styles.secondaryActionIconText]}>{icon}</Text></View>
-      <View style={styles.actionCopy}>
-        <Text style={[styles.actionText, secondary && styles.secondaryActionText]}>{label}</Text>
-        <Text style={[styles.actionHint, secondary && styles.secondaryActionHint]}>{hint}</Text>
+      {busy ? <ActivityIndicator color={colors.white} /> : icon ? <Text style={[styles.buttonIcon, secondary && styles.buttonIconSecondary]}>{icon}</Text> : null}
+      <Text style={[styles.buttonText, secondary && styles.buttonTextSecondary]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function TabButton({
+  label,
+  icon,
+  selected,
+  onPress,
+}: {
+  label: string;
+  icon: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="tab" accessibilityState={{ selected }} onPress={onPress} style={styles.tabButton}>
+      <View style={[styles.tabIconWrap, selected && styles.tabIconWrapSelected]}>
+        <Text style={[styles.tabIcon, selected && styles.tabIconSelected]}>{icon}</Text>
       </View>
-      <Text style={[styles.actionChevron, secondary && styles.secondaryActionChevron]}>›</Text>
+      <Text style={[styles.tabLabel, selected && styles.tabLabelSelected]}>{label}</Text>
     </Pressable>
   );
 }
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [diagnosisStep, setDiagnosisStep] = useState<DiagnosisStep>("photo");
   const [image, setImage] = useState<ImageSelection | null>(null);
   const [question, setQuestion] = useState("");
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const questionPrompts = ["What does this mean?", "How can I fix it?"];
+  const beginDiagnosis = () => {
+    setActiveTab("diagnose");
+    setDiagnosisStep("photo");
+    setError(null);
+  };
 
   const chooseFromLibrary = async () => {
     setError(null);
@@ -114,11 +139,7 @@ export default function App() {
       Alert.alert("Photo access needed", "Allow photo access to choose a troubleshooting image.");
       return;
     }
-    const selection = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      quality: 0.85,
-    });
+    const selection = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.85 });
     if (!selection.canceled && selection.assets[0]) {
       const next = friendlyImage(selection.assets[0]);
       if (next) {
@@ -135,11 +156,7 @@ export default function App() {
       Alert.alert("Camera access needed", "Allow camera access to take a troubleshooting photo.");
       return;
     }
-    const capture = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      quality: 0.85,
-    });
+    const capture = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.85 });
     if (!capture.canceled && capture.assets[0]) {
       const next = friendlyImage(capture.assets[0]);
       if (next) {
@@ -161,12 +178,11 @@ export default function App() {
     setError(null);
     setResult(null);
     try {
-      setResult(await createDiagnosis(question, image));
+      const diagnosis = await createDiagnosis(question, image);
+      setResult(diagnosis);
+      setDiagnosisStep("result");
     } catch (caught) {
-      const message = caught instanceof DiagnosisApiError
-        ? caught.message
-        : "Something went wrong. Check your connection and try again.";
-      setError(message);
+      setError(caught instanceof DiagnosisApiError ? caught.message : "Something went wrong. Check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -177,6 +193,8 @@ export default function App() {
     setQuestion("");
     setError(null);
     setResult(null);
+    setDiagnosisStep("photo");
+    setActiveTab("home");
   };
 
   const openSource = async (value: string) => {
@@ -192,306 +210,351 @@ export default function App() {
     }
   };
 
-  const canSubmit = Boolean(image && question.trim() && !isLoading);
-  const imageSizeLabel = image?.size == null
-    ? "Image ready"
-    : `${(image.size / (1024 * 1024)).toFixed(1)} MB photo`;
+  const imageSizeLabel = image?.size == null ? "Ready to analyze" : `${(image.size / (1024 * 1024)).toFixed(1)} MB photo`;
+  const selectedPrompt = (value: string) => {
+    setQuestion(value);
+    setError(null);
+  };
 
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.app}>
-        <StatusBar barStyle="dark-content" backgroundColor={colors.paper} />
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-        <View style={styles.header}>
-          <View style={styles.brandMark}><Text style={styles.brandGlyph}>⌕</Text></View>
+        <StatusBar barStyle="dark-content" backgroundColor={colors.canvas} />
+        <View style={styles.topBar}>
+          <View style={styles.brandIcon}><Text style={styles.brandIconText}>◎</Text></View>
           <View style={styles.brandCopy}>
-            <Text style={styles.brandName}>SNAPLENS <Text style={styles.brandAI}>AI</Text></Text>
-            <Text style={styles.brandCaption}>VISUAL TROUBLESHOOTING</Text>
+            <Text style={styles.brandName}>SnapLens <Text style={styles.brandAI}>AI</Text></Text>
+            <Text style={styles.brandCaption}>SEE IT. SOLVE IT.</Text>
           </View>
-          <View style={styles.onlinePill}><View style={styles.onlineDot} /><Text style={styles.onlineText}>PHOTO GUIDE</Text></View>
+          <View style={styles.topBadge}><View style={styles.topBadgeDot} /><Text style={styles.topBadgeText}>READY</Text></View>
         </View>
 
-        <View style={styles.hero}>
-          <View style={styles.heroGlow} />
-          <View style={styles.heroTopline}><View style={styles.heroSpark}><Text style={styles.heroSparkText}>✦</Text></View><Text style={styles.eyebrow}>YOUR EVERYDAY REPAIR GUIDE</Text></View>
-          <Text style={styles.title}>See it.{"\n"}Understand it.</Text>
-          <Text style={styles.subtitle}>A photo and a good question are all you need to get started.</Text>
-          <View style={styles.heroFooter}><View style={styles.heroFooterLine} /><Text style={styles.heroFooterText}>PHOTO  <Text style={styles.heroFooterArrow}>→</Text>  PRACTICAL GUIDANCE</Text></View>
-        </View>
+        <View style={styles.screenContent}>
+          {activeTab === "home" ? (
+            <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+              <Text style={styles.greeting}>YOUR PERSONAL VISUAL ASSISTANT</Text>
+              <Text style={styles.homeTitle}>What can we help{ "\n" }you figure out?</Text>
+              <Text style={styles.homeIntro}>Get clear, practical guidance for the things you use every day.</Text>
 
-        <View style={styles.stepHeading}>
-          <View style={styles.stepNumber}><Text style={styles.stepNumberText}>01</Text></View>
-          <View style={styles.stepCopy}>
-            <Text style={styles.stepTitle}>Show us the issue</Text>
-            <Text style={styles.stepHint}>Capture an error message, label, or device.</Text>
-          </View>
-        </View>
-
-        {image ? (
-          <View style={styles.photoCard}>
-            <Image source={{ uri: image.uri }} style={styles.preview} resizeMode="cover" accessibilityLabel="Selected troubleshooting photo" />
-            <View style={styles.photoMeta}>
-              <View style={styles.photoMetaCopy}>
-                <Text style={styles.photoName} numberOfLines={1}>{image.name}</Text>
-                <Text style={styles.photoSize}>{imageSizeLabel}</Text>
+              <View style={styles.homeHero}>
+                <View style={styles.heroOrb}><Text style={styles.heroOrbText}>◎</Text></View>
+                <View style={styles.heroTag}><Text style={styles.heroTagText}>SNAP  ·  ASK  ·  SOLVE</Text></View>
+                <Text style={styles.homeHeroTitle}>Turn a confusing{ "\n" }moment into a clear next step.</Text>
+                <Text style={styles.homeHeroBody}>Show us the device or error. We’ll help you understand what you’re seeing.</Text>
+                <Pressable accessibilityRole="button" onPress={beginDiagnosis} style={({ pressed }) => [styles.heroCta, pressed && styles.buttonPressed]}>
+                  <Text style={styles.heroCtaText}>Start a diagnosis</Text><Text style={styles.heroCtaArrow}>→</Text>
+                </Pressable>
               </View>
-              <Pressable accessibilityRole="button" onPress={() => { setImage(null); setResult(null); setError(null); }} style={styles.removeButton}>
-                <Text style={styles.removeText}>Remove</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.photoPlaceholder}>
-            <View style={styles.cameraIcon}><Text style={styles.cameraGlyph}>⌗</Text></View>
-            <Text style={styles.placeholderTitle}>Add a photo to get started</Text>
-            <Text style={styles.placeholderText}>Keep the device and any error message in focus.</Text>
-            <View style={styles.formatPill}><Text style={styles.formatText}>JPG  ·  PNG  ·  WEBP  ·  UP TO 10 MB</Text></View>
-          </View>
-        )}
 
-        <View style={styles.photoActions}>
-          <View style={styles.actionColumn}><ActionButton label="Take a photo" hint="Use your camera" icon="◉" onPress={takePhoto} disabled={isLoading} /></View>
-          <View style={styles.actionColumn}><ActionButton label="Choose photo" hint="From your gallery" icon="▧" onPress={chooseFromLibrary} secondary disabled={isLoading} /></View>
-        </View>
-
-        <View style={[styles.stepHeading, styles.questionHeading]}>
-          <View style={styles.stepNumber}><Text style={styles.stepNumberText}>02</Text></View>
-          <View style={styles.stepCopy}>
-            <Text style={styles.stepTitle}>What would you like to know?</Text>
-            <Text style={styles.stepHint}>Add a question so we can focus the guidance.</Text>
-          </View>
-        </View>
-
-        <View style={styles.promptRow}>
-          {questionPrompts.map((prompt) => (
-            <Pressable key={prompt} accessibilityRole="button" onPress={() => { setQuestion(prompt); setResult(null); setError(null); }} style={({ pressed }) => [styles.promptChip, pressed && styles.promptChipPressed]}>
-              <Text style={styles.promptChipText}>{prompt}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.inputCard}>
-          <Text style={styles.inputLabel}>YOUR QUESTION</Text>
-          <TextInput
-            accessibilityLabel="Your troubleshooting question"
-            editable={!isLoading}
-            multiline
-            maxLength={MAX_QUESTION_CHARS}
-            onChangeText={(value) => { setQuestion(value); setResult(null); setError(null); }}
-            placeholder="Describe what you’re seeing…"
-            placeholderTextColor="#87948F"
-            returnKeyType="default"
-            style={styles.questionInput}
-            textAlignVertical="top"
-            value={question}
-          />
-          <Text style={styles.charCount}>{question.length}/{MAX_QUESTION_CHARS.toLocaleString()}</Text>
-        </View>
-
-        {error ? (
-          <View accessibilityRole="alert" style={styles.errorBox}>
-            <Text style={styles.errorTitle}>Let’s try that again</Text>
-            <Text style={styles.errorText}>{error}</Text>
-            {!isLoading && image && question.trim() ? (
-              <Pressable accessibilityRole="button" onPress={submit} style={styles.retryButton}>
-                <Text style={styles.retryText}>Retry request</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canSubmit, busy: isLoading }}
-          disabled={!canSubmit}
-          onPress={submit}
-          style={({ pressed }) => [styles.submitButton, !canSubmit && styles.submitDisabled, pressed && canSubmit && styles.submitPressed]}
-        >
-          {isLoading ? (
-            <><ActivityIndicator color={colors.white} /><Text style={styles.submitText}>Checking your photo…</Text></>
-          ) : (
-            <><Text style={styles.submitText}>Get troubleshooting help</Text><Text style={styles.submitArrow}>→</Text></>
-          )}
-        </Pressable>
-        <Text style={styles.privacyNote}>Your photo is used for this request and isn’t saved to conversation history.</Text>
-
-        {result ? (
-          <View style={styles.resultSection}>
-            <View style={styles.resultHeading}>
-              <View style={styles.resultCheck}><Text style={styles.resultCheckText}>✓</Text></View>
-              <View style={styles.stepCopy}>
-                <Text style={styles.resultEyebrow}>{result.status === "completed" ? "YOUR GUIDANCE" : "A LITTLE MORE INFO"}</Text>
-                <Text style={styles.resultTitle}>{result.status === "completed" ? "Here’s what we found" : "Let’s narrow it down"}</Text>
+              <View style={styles.sectionTitleRow}>
+                <Text style={styles.sectionTitle}>How it works</Text>
+                <Text style={styles.sectionMeta}>3 simple steps</Text>
               </View>
-            </View>
-            <View style={styles.answerCard}>
-              <Text style={styles.answerText}>{result.answer}</Text>
-            </View>
-
-            {result.warnings.length > 0 ? (
-              <View style={styles.warningCard}>
-                <Text style={styles.warningHeading}>A note before you continue</Text>
-                {result.warnings.map((warning, index) => <Text key={`${index}-${warning}`} style={styles.warningText}>•  {warning}</Text>)}
-              </View>
-            ) : null}
-
-            {result.citations.length > 0 ? (
-              <View style={styles.sourcesSection}>
-                <View style={styles.sourcesHeading}>
-                  <Text style={styles.sourcesTitle}>Sources</Text>
-                  <Text style={styles.sourcesCount}>{result.citations.length} references</Text>
+              <View style={styles.stepsCard}>
+                <View style={styles.homeStep}>
+                  <View style={[styles.homeStepIcon, styles.homeStepBlue]}><Text style={styles.homeStepIconText}>01</Text></View>
+                  <View style={styles.homeStepCopy}><Text style={styles.homeStepTitle}>Take a clear photo</Text><Text style={styles.homeStepHint}>Capture the device or error message.</Text></View>
+                  <Text style={styles.homeStepArrow}>›</Text>
                 </View>
-                {result.citations.map((citation) => (
-                  <Pressable
-                    accessibilityRole="link"
-                    key={citation.source_id}
-                    onPress={() => void openSource(citation.url)}
-                    style={({ pressed }) => [styles.sourceCard, pressed && styles.sourcePressed]}
-                  >
-                    <View style={styles.sourceIcon}><Text style={styles.sourceIconText}>↗</Text></View>
-                    <View style={styles.sourceCopy}>
-                      <Text style={styles.sourceTitle} numberOfLines={2}>{citation.title}</Text>
-                      <Text style={styles.sourcePublisher} numberOfLines={1}>{citation.publisher || new URL(citation.url).hostname}</Text>
-                    </View>
-                    <Text style={styles.sourceChevron}>›</Text>
-                  </Pressable>
+                <View style={styles.stepDivider} />
+                <View style={styles.homeStep}>
+                  <View style={[styles.homeStepIcon, styles.homeStepMint]}><Text style={styles.homeStepIconText}>02</Text></View>
+                  <View style={styles.homeStepCopy}><Text style={styles.homeStepTitle}>Ask your question</Text><Text style={styles.homeStepHint}>Tell us what you want to understand.</Text></View>
+                  <Text style={styles.homeStepArrow}>›</Text>
+                </View>
+                <View style={styles.stepDivider} />
+                <View style={styles.homeStep}>
+                  <View style={[styles.homeStepIcon, styles.homeStepGold]}><Text style={styles.homeStepIconText}>03</Text></View>
+                  <View style={styles.homeStepCopy}><Text style={styles.homeStepTitle}>Explore the guidance</Text><Text style={styles.homeStepHint}>Review the answer and its sources.</Text></View>
+                  <Text style={styles.homeStepArrow}>›</Text>
+                </View>
+              </View>
+
+              <Pressable accessibilityRole="button" onPress={() => setActiveTab("guide")} style={styles.tipCard}>
+                <View style={styles.tipIcon}><Text style={styles.tipIconText}>✦</Text></View>
+                <View style={styles.tipCopy}><Text style={styles.tipTitle}>Get better results</Text><Text style={styles.tipBody}>A few quick photo tips can make all the difference.</Text></View>
+                <Text style={styles.homeStepArrow}>›</Text>
+              </Pressable>
+            </ScrollView>
+          ) : null}
+
+          {activeTab === "guide" ? (
+            <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+              <Text style={styles.greeting}>SNAPLENS FIELD GUIDE</Text>
+              <Text style={styles.pageTitle}>A little prep goes a long way.</Text>
+              <Text style={styles.pageIntro}>Use these tips to help SnapLens understand what you’re seeing.</Text>
+
+              <View style={styles.guideHero}><Text style={styles.guideHeroIcon}>◎</Text><Text style={styles.guideHeroTitle}>Make the important details easy to see.</Text><Text style={styles.guideHeroBody}>Good lighting and a steady photo help bring small labels and error codes into focus.</Text></View>
+
+              <Text style={styles.sectionTitle}>Photo checklist</Text>
+              <View style={styles.guideListCard}>
+                {[
+                  ["01", "Get close enough", "Keep the device and its screen in the frame."],
+                  ["02", "Avoid glare", "Move to a brighter spot without harsh reflections."],
+                  ["03", "Show the whole message", "Include all words, numbers, and indicator lights."],
+                  ["04", "Keep it steady", "Pause for a moment so text stays sharp."],
+                ].map(([number, title, description], index) => (
+                  <View key={number}>
+                    <View style={styles.guideRow}><View style={styles.guideNumber}><Text style={styles.guideNumberText}>{number}</Text></View><View style={styles.guideText}><Text style={styles.guideTitle}>{title}</Text><Text style={styles.guideBody}>{description}</Text></View></View>
+                    {index < 3 ? <View style={styles.stepDivider} /> : null}
+                  </View>
                 ))}
               </View>
-            ) : (
-              <View style={styles.noSources}><Text style={styles.noSourcesText}>No verified sources were available, so the app won’t show repair steps as confirmed.</Text></View>
-            )}
 
-            <Pressable accessibilityRole="button" onPress={reset} style={styles.newCheckButton}>
-              <Text style={styles.newCheckText}>Start another check</Text>
-            </Pressable>
-          </View>
-        ) : null}
+              <View style={styles.questionTip}>
+                <Text style={styles.questionTipLabel}>GOOD QUESTIONS ARE SPECIFIC</Text>
+                <Text style={styles.questionTipText}>“What does this paper jam message mean?” gives us more to work with than “Help.”</Text>
+              </View>
+              <PrimaryButton label="Start a diagnosis" icon="＋" onPress={beginDiagnosis} />
+            </ScrollView>
+          ) : null}
 
-        <View style={styles.footer}>
-          <View style={styles.footerRule} />
-          <Text style={styles.footerBrand}>SNAPLENS AI</Text>
-          <Text style={styles.footerText}>Thoughtful help for the things you use every day.</Text>
+          {activeTab === "diagnose" ? (
+            <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={styles.flowTopline}>
+                <Pressable accessibilityRole="button" onPress={() => {
+                  if (diagnosisStep === "question") setDiagnosisStep("photo");
+                  else if (diagnosisStep === "result") setDiagnosisStep("question");
+                  else setActiveTab("home");
+                }} style={styles.backButton}><Text style={styles.backArrow}>‹</Text></Pressable>
+                <View style={styles.flowTopCopy}><Text style={styles.flowEyebrow}>NEW DIAGNOSIS</Text><Text style={styles.flowTitle}>{diagnosisStep === "photo" ? "Add a photo" : diagnosisStep === "question" ? "Tell us more" : "Your guidance"}</Text></View>
+                <Text style={styles.flowCount}>{diagnosisStep === "photo" ? "01" : diagnosisStep === "question" ? "02" : "03"} / 03</Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressSegment, styles.progressActive]} />
+                <View style={[styles.progressSegment, diagnosisStep !== "photo" && styles.progressActive]} />
+                <View style={[styles.progressSegment, diagnosisStep === "result" && styles.progressActive]} />
+              </View>
+
+              {diagnosisStep === "photo" ? (
+                <View>
+                  <Text style={styles.flowDescription}>Start with a clear photo of the device, label, or error you’re seeing.</Text>
+                  {image ? (
+                    <View style={styles.selectedPhotoCard}>
+                      <Image source={{ uri: image.uri }} style={styles.selectedPreview} resizeMode="cover" accessibilityLabel="Selected troubleshooting photo" />
+                      <View style={styles.selectedMeta}><View style={styles.selectedMetaCopy}><Text style={styles.selectedName} numberOfLines={1}>{image.name}</Text><Text style={styles.selectedSize}>{imageSizeLabel}</Text></View><Pressable accessibilityRole="button" onPress={() => { setImage(null); setResult(null); }}><Text style={styles.removeText}>Remove</Text></Pressable></View>
+                    </View>
+                  ) : (
+                    <View style={styles.uploadCard}>
+                      <View style={styles.uploadIcon}><Text style={styles.uploadIconText}>⌗</Text></View>
+                      <Text style={styles.uploadTitle}>Your photo will appear here</Text>
+                      <Text style={styles.uploadBody}>Keep the device and any error message in focus.</Text>
+                      <View style={styles.formatPill}><Text style={styles.formatText}>JPG  ·  PNG  ·  WEBP  ·  MAX 10 MB</Text></View>
+                    </View>
+                  )}
+                  <View style={styles.photoActions}>
+                    <View style={styles.photoActionColumn}><PrimaryButton label="Take a photo" icon="◉" onPress={takePhoto} disabled={isLoading} /></View>
+                    <View style={styles.photoActionColumn}><PrimaryButton label="Choose photo" icon="▧" onPress={chooseFromLibrary} secondary disabled={isLoading} /></View>
+                  </View>
+                  <View style={styles.helperCard}><Text style={styles.helperIcon}>✦</Text><Text style={styles.helperText}>Tip: move closer if the error code is small.</Text><Pressable accessibilityRole="button" onPress={() => setActiveTab("guide")}><Text style={styles.helperLink}>Photo tips</Text></Pressable></View>
+                  <View style={styles.bottomAction}><PrimaryButton label="Continue to your question" icon="→" onPress={() => { setError(null); setDiagnosisStep("question"); }} disabled={!image} /></View>
+                </View>
+              ) : null}
+
+              {diagnosisStep === "question" ? (
+                <View>
+                  <Text style={styles.flowDescription}>What would you like help understanding about this photo?</Text>
+                  {image ? <Pressable accessibilityRole="button" onPress={() => setDiagnosisStep("photo")} style={styles.miniPhotoCard}><Image source={{ uri: image.uri }} style={styles.miniPreview} resizeMode="cover" /><View style={styles.miniPhotoCopy}><Text style={styles.miniPhotoLabel}>PHOTO ADDED</Text><Text style={styles.miniPhotoName} numberOfLines={1}>{image.name}</Text></View><Text style={styles.editLink}>Edit</Text></Pressable> : null}
+                  <Text style={styles.inputLabel}>PICK A STARTING QUESTION</Text>
+                  <View style={styles.promptRow}>
+                    {["What does this mean?", "How can I fix it?"].map((prompt) => (
+                      <Pressable key={prompt} accessibilityRole="button" onPress={() => { selectedPrompt(prompt); }} style={[styles.promptChip, question === prompt && styles.promptChipSelected]}><Text style={[styles.promptChipText, question === prompt && styles.promptChipTextSelected]}>{prompt}</Text></Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.inputCard}>
+                    <Text style={styles.inputLabel}>YOUR QUESTION</Text>
+                    <TextInput accessibilityLabel="Your troubleshooting question" editable={!isLoading} multiline maxLength={MAX_QUESTION_CHARS} onChangeText={(value) => { setQuestion(value); setError(null); }} placeholder="For example: What does this blinking red light mean?" placeholderTextColor="#929BAA" returnKeyType="default" style={styles.questionInput} textAlignVertical="top" value={question} />
+                    <Text style={styles.charCount}>{question.length}/{MAX_QUESTION_CHARS.toLocaleString()}</Text>
+                  </View>
+                  {error ? <View accessibilityRole="alert" style={styles.errorBox}><Text style={styles.errorTitle}>We couldn’t complete that request</Text><Text style={styles.errorText}>{error}</Text><Pressable accessibilityRole="button" onPress={submit} style={styles.retryButton}><Text style={styles.retryText}>Try again</Text></Pressable></View> : null}
+                  <View style={styles.bottomAction}><PrimaryButton label={isLoading ? "Looking at your photo…" : "Get troubleshooting help"} icon={isLoading ? undefined : "→"} busy={isLoading} onPress={submit} disabled={!image || !question.trim()} /></View>
+                  <Text style={styles.privacyNote}>Your photo is used for this request and isn’t saved to conversation history.</Text>
+                </View>
+              ) : null}
+
+              {diagnosisStep === "result" && result ? (
+                <View>
+                  <View style={styles.resultIntro}><View style={styles.resultIcon}><Text style={styles.resultIconText}>✓</Text></View><View style={styles.resultIntroCopy}><Text style={styles.resultEyebrow}>{result.status === "completed" ? "ANALYSIS COMPLETE" : "ONE MORE DETAIL"}</Text><Text style={styles.resultTitle}>{result.status === "completed" ? "Here’s what we found" : "Let’s narrow it down"}</Text></View></View>
+                  <View style={styles.answerCard}><Text style={styles.answerLabel}>SNAPLENS GUIDANCE</Text><Text style={styles.answerText}>{result.answer}</Text></View>
+                  {result.warnings.length > 0 ? <View style={styles.warningCard}><Text style={styles.warningHeading}>A note before you continue</Text>{result.warnings.map((warning, index) => <Text key={`${index}-${warning}`} style={styles.warningText}>•  {warning}</Text>)}</View> : null}
+                  <View style={styles.sourcesHeader}><Text style={styles.sectionTitle}>Sources</Text><Text style={styles.sectionMeta}>{result.citations.length} references</Text></View>
+                  {result.citations.length > 0 ? result.citations.map((citation) => (
+                    <Pressable accessibilityRole="link" key={citation.source_id} onPress={() => void openSource(citation.url)} style={({ pressed }) => [styles.sourceCard, pressed && styles.sourcePressed]}>
+                      <View style={styles.sourceIcon}><Text style={styles.sourceIconText}>↗</Text></View><View style={styles.sourceCopy}><Text style={styles.sourceTitle} numberOfLines={2}>{citation.title}</Text><Text style={styles.sourcePublisher} numberOfLines={1}>{citation.publisher || new URL(citation.url).hostname}</Text></View><Text style={styles.sourceChevron}>›</Text>
+                    </Pressable>
+                  )) : <View style={styles.noSources}><Text style={styles.noSourcesTitle}>No verified sources found</Text><Text style={styles.noSourcesText}>Treat this guidance as a starting point and check your device manual before repairs.</Text></View>}
+                  <View style={styles.bottomAction}><PrimaryButton label="Start a new diagnosis" icon="＋" onPress={reset} /></View>
+                </View>
+              ) : null}
+            </ScrollView>
+          ) : null}
         </View>
-        </ScrollView>
+
+        <View style={styles.tabBar}>
+          <TabButton label="Home" icon="⌂" selected={activeTab === "home"} onPress={() => setActiveTab("home")} />
+          <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} />
+          <TabButton label="Guide" icon="✧" selected={activeTab === "guide"} onPress={() => setActiveTab("guide")} />
+        </View>
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  app: { flex: 1, backgroundColor: colors.paper },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 42, maxWidth: 720, width: "100%", alignSelf: "center" },
-  header: { flexDirection: "row", alignItems: "center", minHeight: 52, marginBottom: 5 },
-  brandMark: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.greenDark, alignItems: "center", justifyContent: "center" },
-  brandGlyph: { color: colors.white, fontSize: 26, lineHeight: 30, fontWeight: "700" },
+  app: { flex: 1, backgroundColor: colors.canvas },
+  topBar: { minHeight: 59, paddingHorizontal: 21, flexDirection: "row", alignItems: "center", backgroundColor: colors.canvas },
+  brandIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
+  brandIconText: { color: colors.white, fontSize: 25, lineHeight: 30, fontWeight: "700" },
   brandCopy: { marginLeft: 10, flex: 1 },
-  brandName: { color: colors.ink, fontWeight: "900", letterSpacing: 1.1, fontSize: 14 },
-  brandAI: { color: colors.green, fontWeight: "700" },
-  brandCaption: { color: colors.muted, fontSize: 8, letterSpacing: 1.35, marginTop: 3 },
-  onlinePill: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, backgroundColor: colors.mint },
-  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green, marginRight: 6 },
-  onlineText: { color: colors.greenDark, fontSize: 8, fontWeight: "800", letterSpacing: 0.85 },
-  hero: { backgroundColor: colors.greenDark, paddingHorizontal: 22, paddingTop: 21, paddingBottom: 18, borderRadius: 25, overflow: "hidden", marginTop: 9, marginBottom: 27, minHeight: 214 },
-  heroGlow: { position: "absolute", width: 190, height: 190, borderRadius: 95, backgroundColor: "#1A5747", right: -78, top: -72, borderWidth: 1, borderColor: "#286451" },
-  heroTopline: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
-  heroSpark: { width: 21, height: 21, borderRadius: 8, backgroundColor: "#2B6B55", alignItems: "center", justifyContent: "center", marginRight: 8 },
-  heroSparkText: { color: "#D3E9D9", fontSize: 12, fontWeight: "700" },
-  eyebrow: { color: "#C2D9CB", fontSize: 8, fontWeight: "800", letterSpacing: 1.45 },
-  title: { fontSize: 34, lineHeight: 37, fontWeight: "800", color: colors.white, letterSpacing: -1.15 },
-  subtitle: { marginTop: 9, color: "#D4E4DB", fontSize: 12, lineHeight: 18, maxWidth: 290 },
-  heroFooter: { flexDirection: "row", alignItems: "center", marginTop: 17 },
-  heroFooterLine: { height: 1, width: 24, backgroundColor: "#8AB49C", marginRight: 9 },
-  heroFooterText: { color: "#C8DED0", fontSize: 8, fontWeight: "800", letterSpacing: 1.15 },
-  heroFooterArrow: { color: "#95C4A6" },
-  stepHeading: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  stepNumber: { width: 35, height: 35, borderRadius: 12, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center", marginRight: 11 },
-  stepNumberText: { color: colors.green, fontSize: 10, fontWeight: "900", letterSpacing: 0.6 },
-  stepCopy: { flex: 1 },
-  stepTitle: { color: colors.ink, fontSize: 14, fontWeight: "800", letterSpacing: -0.15 },
-  stepHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
-  photoPlaceholder: { minHeight: 168, borderWidth: 1, borderStyle: "dashed", borderColor: "#B8CBC0", borderRadius: 21, backgroundColor: "#EDF3EE", alignItems: "center", justifyContent: "center", padding: 18 },
-  cameraIcon: { width: 43, height: 43, borderRadius: 15, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", marginBottom: 10, borderWidth: 1, borderColor: "#E5ECE6" },
-  cameraGlyph: { color: colors.green, fontSize: 25, lineHeight: 30, fontWeight: "700" },
-  placeholderTitle: { color: colors.ink, fontWeight: "800", fontSize: 13 },
-  placeholderText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 5, textAlign: "center" },
-  formatPill: { backgroundColor: "#E3ECE5", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, marginTop: 11 },
-  formatText: { color: colors.muted, fontSize: 7, fontWeight: "800", letterSpacing: 0.8 },
-  photoCard: { borderRadius: 21, overflow: "hidden", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, shadowColor: "#253C30", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
-  preview: { width: "100%", height: 220, backgroundColor: "#E8ECE8" },
-  photoMeta: { paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center" },
-  photoMetaCopy: { flex: 1 },
-  photoName: { color: colors.ink, fontSize: 12, fontWeight: "700" },
-  photoSize: { color: colors.muted, marginTop: 3, fontSize: 10 },
-  removeButton: { paddingHorizontal: 10, paddingVertical: 7 },
-  removeText: { color: colors.red, fontSize: 11, fontWeight: "700" },
-  photoActions: { flexDirection: "row", gap: 10, marginTop: 10 },
-  actionColumn: { flex: 1 },
-  actionButton: { minHeight: 59, borderRadius: 16, backgroundColor: colors.green, alignItems: "center", justifyContent: "center", paddingHorizontal: 9, borderWidth: 1, borderColor: colors.green, flexDirection: "row" },
-  secondaryButton: { backgroundColor: colors.white, borderColor: colors.line },
-  disabledButton: { opacity: 0.5 },
-  pressedButton: { opacity: 0.82, transform: [{ scale: 0.985 }] },
-  actionIcon: { width: 31, height: 31, borderRadius: 11, backgroundColor: "#2B7A61", alignItems: "center", justifyContent: "center", marginRight: 8 },
-  actionIconText: { color: colors.white, fontSize: 17, fontWeight: "700" },
-  secondaryActionIconText: { color: colors.green },
-  actionCopy: { flex: 1 },
-  actionText: { color: colors.white, fontSize: 10, fontWeight: "800" },
-  secondaryActionText: { color: colors.ink },
-  actionHint: { color: "#D9E9E0", fontSize: 8, marginTop: 3 },
-  secondaryActionHint: { color: colors.muted },
-  actionChevron: { color: "#D9E9E0", fontSize: 20, marginLeft: 2 },
-  secondaryActionChevron: { color: colors.muted },
-  questionHeading: { marginTop: 27 },
-  promptRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 10 },
-  promptChip: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 7 },
-  promptChipPressed: { backgroundColor: colors.mint, borderColor: "#BFD5C7" },
-  promptChipText: { color: colors.greenDark, fontSize: 9, fontWeight: "700" },
-  inputCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 8 },
-  inputLabel: { color: colors.muted, fontSize: 8, fontWeight: "800", letterSpacing: 1.1, marginBottom: 7 },
-  questionInput: { minHeight: 75, color: colors.ink, fontSize: 13, lineHeight: 20, padding: 0 },
-  charCount: { alignSelf: "flex-end", color: colors.muted, fontSize: 9, marginTop: 4 },
-  errorBox: { backgroundColor: "#FDEAE7", borderColor: "#F1C5BE", borderWidth: 1, padding: 14, marginTop: 13, borderRadius: 16 },
-  errorTitle: { color: colors.red, fontWeight: "800", fontSize: 12 },
-  errorText: { color: "#713A36", fontSize: 12, lineHeight: 18, marginTop: 4 },
+  brandName: { color: colors.ink, fontWeight: "900", fontSize: 15, letterSpacing: -0.4 },
+  brandAI: { color: colors.blue, fontWeight: "800" },
+  brandCaption: { color: colors.muted, fontSize: 8, fontWeight: "800", letterSpacing: 1.5, marginTop: 3 },
+  topBadge: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 20, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 7 },
+  topBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.teal, marginRight: 6 },
+  topBadgeText: { color: colors.navy, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  screenContent: { flex: 1 },
+  pageContent: { paddingHorizontal: 20, paddingTop: 13, paddingBottom: 28, maxWidth: 720, width: "100%", alignSelf: "center" },
+  greeting: { color: colors.blue, fontSize: 9, fontWeight: "900", letterSpacing: 1.55, marginTop: 6 },
+  homeTitle: { color: colors.ink, fontSize: 29, lineHeight: 34, fontWeight: "900", letterSpacing: -1.1, marginTop: 9 },
+  homeIntro: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 8, maxWidth: 310 },
+  homeHero: { backgroundColor: colors.navy, borderRadius: 25, padding: 20, marginTop: 20, minHeight: 237, overflow: "hidden" },
+  heroOrb: { position: "absolute", width: 170, height: 170, borderRadius: 85, right: -49, top: -65, backgroundColor: "#263761", borderWidth: 1, borderColor: "#344976", alignItems: "center", justifyContent: "center" },
+  heroOrbText: { color: "#AAB8FC", fontSize: 84, fontWeight: "300", marginTop: 44, marginLeft: -42 },
+  heroTag: { alignSelf: "flex-start", backgroundColor: "#29385B", borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6 },
+  heroTagText: { color: "#BEC8FF", fontSize: 8, fontWeight: "900", letterSpacing: 1.1 },
+  homeHeroTitle: { color: colors.white, fontSize: 21, lineHeight: 26, fontWeight: "900", letterSpacing: -0.5, marginTop: 17 },
+  homeHeroBody: { color: "#C5CDDC", fontSize: 11, lineHeight: 17, marginTop: 8, maxWidth: 235 },
+  heroCta: { minHeight: 42, borderRadius: 13, paddingHorizontal: 13, marginTop: 17, backgroundColor: colors.blue, alignSelf: "flex-start", flexDirection: "row", alignItems: "center" },
+  heroCtaText: { color: colors.white, fontSize: 11, fontWeight: "900" },
+  heroCtaArrow: { color: colors.white, fontSize: 16, marginLeft: 13, marginTop: -2 },
+  sectionTitleRow: { flexDirection: "row", alignItems: "baseline", marginTop: 24, marginBottom: 11 },
+  sectionTitle: { color: colors.ink, flex: 1, fontSize: 15, fontWeight: "900", letterSpacing: -0.2 },
+  sectionMeta: { color: colors.muted, fontSize: 10, fontWeight: "700" },
+  stepsCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 20, paddingHorizontal: 13 },
+  homeStep: { minHeight: 63, flexDirection: "row", alignItems: "center" },
+  homeStepIcon: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 11 },
+  homeStepBlue: { backgroundColor: colors.blueTint },
+  homeStepMint: { backgroundColor: colors.tealTint },
+  homeStepGold: { backgroundColor: colors.amber },
+  homeStepIconText: { color: colors.navy, fontSize: 9, fontWeight: "900" },
+  homeStepCopy: { flex: 1 },
+  homeStepTitle: { color: colors.ink, fontSize: 11, fontWeight: "800" },
+  homeStepHint: { color: colors.muted, fontSize: 9, marginTop: 4 },
+  homeStepArrow: { color: "#A4ADBC", fontSize: 23, marginLeft: 8 },
+  stepDivider: { height: 1, backgroundColor: colors.line, marginLeft: 45 },
+  tipCard: { backgroundColor: colors.white, borderRadius: 18, padding: 13, marginTop: 12, borderWidth: 1, borderColor: colors.line, flexDirection: "row", alignItems: "center" },
+  tipIcon: { width: 32, height: 32, borderRadius: 11, backgroundColor: colors.amber, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  tipIconText: { color: "#C58622", fontSize: 16 },
+  tipCopy: { flex: 1 },
+  tipTitle: { color: colors.ink, fontSize: 10, fontWeight: "900" },
+  tipBody: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 },
+  pageTitle: { color: colors.ink, fontSize: 26, lineHeight: 31, fontWeight: "900", letterSpacing: -0.8, marginTop: 10 },
+  pageIntro: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 8, marginBottom: 19 },
+  guideHero: { borderRadius: 22, backgroundColor: colors.navy, padding: 19, marginBottom: 22 },
+  guideHeroIcon: { color: "#AAB8FC", fontSize: 35, lineHeight: 42 },
+  guideHeroTitle: { color: colors.white, fontSize: 16, lineHeight: 21, fontWeight: "900", marginTop: 12 },
+  guideHeroBody: { color: "#C5CDDC", fontSize: 11, lineHeight: 17, marginTop: 7 },
+  guideListCard: { borderRadius: 19, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 13, marginTop: 11, marginBottom: 15 },
+  guideRow: { flexDirection: "row", alignItems: "center", minHeight: 64 },
+  guideNumber: { width: 30, height: 30, borderRadius: 10, backgroundColor: colors.blueTint, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  guideNumberText: { color: colors.blueDark, fontSize: 8, fontWeight: "900" },
+  guideText: { flex: 1 },
+  guideTitle: { color: colors.ink, fontSize: 11, fontWeight: "800" },
+  guideBody: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 4 },
+  questionTip: { backgroundColor: colors.blueTint, borderRadius: 16, padding: 14, marginBottom: 14 },
+  questionTipLabel: { color: colors.blueDark, fontSize: 8, fontWeight: "900", letterSpacing: 1.2 },
+  questionTipText: { color: colors.ink, fontSize: 11, lineHeight: 17, marginTop: 7 },
+  flowTopline: { flexDirection: "row", alignItems: "center", marginTop: 5 },
+  backButton: { width: 36, height: 36, borderRadius: 13, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  backArrow: { color: colors.ink, fontSize: 25, lineHeight: 28, marginTop: -3 },
+  flowTopCopy: { flex: 1 },
+  flowEyebrow: { color: colors.blue, fontSize: 8, fontWeight: "900", letterSpacing: 1.25 },
+  flowTitle: { color: colors.ink, fontSize: 15, fontWeight: "900", marginTop: 3 },
+  flowCount: { color: colors.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.7 },
+  progressTrack: { flexDirection: "row", gap: 5, marginTop: 15, marginBottom: 15 },
+  progressSegment: { flex: 1, height: 4, borderRadius: 4, backgroundColor: "#E0E5EE" },
+  progressActive: { backgroundColor: colors.blue },
+  flowDescription: { color: colors.muted, fontSize: 12, lineHeight: 19, marginBottom: 14 },
+  uploadCard: { minHeight: 190, borderRadius: 22, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderStyle: "dashed", alignItems: "center", justifyContent: "center", padding: 18 },
+  uploadIcon: { width: 49, height: 49, borderRadius: 17, backgroundColor: colors.blueTint, alignItems: "center", justifyContent: "center", marginBottom: 11 },
+  uploadIconText: { color: colors.blue, fontSize: 27, lineHeight: 31, fontWeight: "700" },
+  uploadTitle: { color: colors.ink, fontSize: 13, fontWeight: "900" },
+  uploadBody: { color: colors.muted, fontSize: 10, lineHeight: 15, textAlign: "center", marginTop: 5 },
+  formatPill: { backgroundColor: colors.soft, borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5, marginTop: 12 },
+  formatText: { color: colors.muted, fontSize: 7, fontWeight: "900", letterSpacing: 0.7 },
+  selectedPhotoCard: { overflow: "hidden", borderRadius: 21, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line },
+  selectedPreview: { width: "100%", height: 205, backgroundColor: colors.soft },
+  selectedMeta: { paddingHorizontal: 13, paddingVertical: 11, flexDirection: "row", alignItems: "center" },
+  selectedMetaCopy: { flex: 1 },
+  selectedName: { color: colors.ink, fontSize: 11, fontWeight: "800" },
+  selectedSize: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  removeText: { color: colors.red, fontSize: 10, fontWeight: "800", paddingHorizontal: 7 },
+  photoActions: { flexDirection: "row", gap: 9, marginTop: 10 },
+  photoActionColumn: { flex: 1 },
+  button: { minHeight: 48, borderRadius: 15, paddingHorizontal: 11, backgroundColor: colors.blue, flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.blue, gap: 7 },
+  buttonSecondary: { backgroundColor: colors.white, borderColor: colors.line },
+  buttonDisabled: { backgroundColor: "#B7C1D9", borderColor: "#B7C1D9" },
+  buttonPressed: { opacity: 0.83, transform: [{ scale: 0.985 }] },
+  buttonIcon: { color: colors.white, fontSize: 15, fontWeight: "800" },
+  buttonIconSecondary: { color: colors.blue },
+  buttonText: { color: colors.white, fontSize: 10, fontWeight: "900", textAlign: "center", flexShrink: 1 },
+  buttonTextSecondary: { color: colors.ink },
+  helperCard: { borderRadius: 13, backgroundColor: colors.tealTint, paddingHorizontal: 11, paddingVertical: 10, marginTop: 12, flexDirection: "row", alignItems: "center" },
+  helperIcon: { color: colors.teal, fontSize: 13, marginRight: 7 },
+  helperText: { flex: 1, color: colors.ink, fontSize: 9, lineHeight: 14 },
+  helperLink: { color: colors.blueDark, fontSize: 9, fontWeight: "900", marginLeft: 5 },
+  bottomAction: { marginTop: 17 },
+  miniPhotoCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 15, padding: 7, marginBottom: 19 },
+  miniPreview: { width: 48, height: 48, borderRadius: 10, backgroundColor: colors.soft },
+  miniPhotoCopy: { flex: 1, marginLeft: 10 },
+  miniPhotoLabel: { color: colors.teal, fontSize: 8, fontWeight: "900", letterSpacing: 0.9 },
+  miniPhotoName: { color: colors.ink, fontSize: 10, fontWeight: "700", marginTop: 4 },
+  editLink: { color: colors.blueDark, fontSize: 10, fontWeight: "900", paddingHorizontal: 9 },
+  inputLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.05, marginBottom: 8 },
+  promptRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 11 },
+  promptChip: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 8 },
+  promptChipSelected: { backgroundColor: colors.blueTint, borderColor: "#C9D1FF" },
+  promptChipText: { color: colors.navy, fontSize: 9, fontWeight: "800" },
+  promptChipTextSelected: { color: colors.blueDark },
+  inputCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 9 },
+  questionInput: { minHeight: 100, color: colors.ink, fontSize: 14, lineHeight: 21, padding: 0 },
+  charCount: { alignSelf: "flex-end", color: colors.muted, fontSize: 9, marginTop: 5 },
+  errorBox: { backgroundColor: colors.redTint, borderColor: "#F1C9C7", borderWidth: 1, padding: 13, marginTop: 12, borderRadius: 15 },
+  errorTitle: { color: colors.red, fontWeight: "900", fontSize: 11 },
+  errorText: { color: "#753D40", fontSize: 10, lineHeight: 16, marginTop: 4 },
   retryButton: { alignSelf: "flex-start", paddingTop: 8 },
-  retryText: { color: colors.red, fontSize: 12, fontWeight: "800", textDecorationLine: "underline" },
-  submitButton: { marginTop: 14, minHeight: 56, paddingHorizontal: 17, backgroundColor: colors.green, borderRadius: 17, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, shadowColor: colors.greenDark, shadowOpacity: 0.18, shadowRadius: 9, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
-  submitDisabled: { backgroundColor: "#A4B8AE" },
-  submitPressed: { backgroundColor: colors.greenDark },
-  submitText: { color: colors.white, fontSize: 13, fontWeight: "800", letterSpacing: 0.1 },
-  submitArrow: { color: colors.white, fontSize: 21, marginLeft: 4, marginTop: -2 },
-  privacyNote: { color: colors.muted, textAlign: "center", fontSize: 10, lineHeight: 16, marginTop: 10, paddingHorizontal: 16 },
-  resultSection: { marginTop: 29, backgroundColor: colors.soft, borderRadius: 23, padding: 14 },
-  resultHeading: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-  resultCheck: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.green, justifyContent: "center", alignItems: "center", marginRight: 11 },
-  resultCheckText: { color: colors.white, fontSize: 18, fontWeight: "800" },
-  resultEyebrow: { color: colors.green, fontSize: 9, fontWeight: "800", letterSpacing: 1.6 },
-  resultTitle: { color: colors.ink, fontSize: 18, fontWeight: "800", marginTop: 3 },
-  answerCard: { backgroundColor: colors.white, borderRadius: 17, padding: 17, borderWidth: 1, borderColor: colors.line },
-  answerText: { color: colors.ink, fontSize: 14, lineHeight: 22 },
-  warningCard: { backgroundColor: colors.amber, borderRadius: 14, padding: 14, marginTop: 11 },
-  warningHeading: { color: colors.amberInk, fontSize: 12, fontWeight: "800", marginBottom: 6 },
-  warningText: { color: colors.amberInk, fontSize: 12, lineHeight: 18, marginTop: 3 },
-  sourcesSection: { marginTop: 21 },
-  sourcesHeading: { flexDirection: "row", alignItems: "baseline", marginBottom: 10 },
-  sourcesTitle: { color: colors.ink, fontSize: 16, fontWeight: "800", flex: 1 },
-  sourcesCount: { color: colors.muted, fontSize: 10 },
-  sourceCard: { backgroundColor: colors.white, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 12, flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  sourcePressed: { backgroundColor: "#F0F6F1" },
-  sourceIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.mint, justifyContent: "center", alignItems: "center", marginRight: 10 },
-  sourceIconText: { color: colors.green, fontSize: 18, fontWeight: "800" },
+  retryText: { color: colors.red, fontSize: 10, fontWeight: "900", textDecorationLine: "underline" },
+  privacyNote: { color: colors.muted, textAlign: "center", fontSize: 9, lineHeight: 14, marginTop: 9, paddingHorizontal: 13 },
+  resultIntro: { flexDirection: "row", alignItems: "center", marginTop: 3, marginBottom: 14 },
+  resultIcon: { width: 39, height: 39, borderRadius: 14, backgroundColor: colors.tealTint, alignItems: "center", justifyContent: "center", marginRight: 11 },
+  resultIconText: { color: colors.teal, fontSize: 19, fontWeight: "900" },
+  resultIntroCopy: { flex: 1 },
+  resultEyebrow: { color: colors.teal, fontSize: 8, fontWeight: "900", letterSpacing: 1.2 },
+  resultTitle: { color: colors.ink, fontSize: 15, fontWeight: "900", marginTop: 3 },
+  answerCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 19, padding: 15 },
+  answerLabel: { color: colors.blue, fontSize: 8, fontWeight: "900", letterSpacing: 1.1, marginBottom: 8 },
+  answerText: { color: colors.ink, fontSize: 13, lineHeight: 21 },
+  warningCard: { backgroundColor: colors.amber, borderRadius: 15, padding: 13, marginTop: 10 },
+  warningHeading: { color: colors.amberInk, fontSize: 10, fontWeight: "900", marginBottom: 6 },
+  warningText: { color: colors.amberInk, fontSize: 10, lineHeight: 16, marginTop: 3 },
+  sourcesHeader: { flexDirection: "row", alignItems: "center", marginTop: 20, marginBottom: 9 },
+  sourceCard: { backgroundColor: colors.white, borderRadius: 15, borderWidth: 1, borderColor: colors.line, padding: 11, flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  sourcePressed: { backgroundColor: colors.soft },
+  sourceIcon: { width: 31, height: 31, borderRadius: 10, backgroundColor: colors.blueTint, justifyContent: "center", alignItems: "center", marginRight: 9 },
+  sourceIconText: { color: colors.blueDark, fontSize: 16, fontWeight: "900" },
   sourceCopy: { flex: 1, paddingRight: 5 },
-  sourceTitle: { color: colors.ink, fontSize: 12, fontWeight: "700", lineHeight: 17 },
-  sourcePublisher: { color: colors.muted, fontSize: 10, marginTop: 3 },
-  sourceChevron: { color: colors.muted, fontSize: 23, marginLeft: 3 },
-  noSources: { backgroundColor: "#EDF3EE", borderRadius: 13, padding: 13, marginTop: 12 },
-  noSourcesText: { color: colors.muted, fontSize: 11, lineHeight: 17 },
-  newCheckButton: { alignItems: "center", paddingVertical: 15, marginTop: 9 },
-  newCheckText: { color: colors.green, fontSize: 13, fontWeight: "800" },
-  footer: { alignItems: "center", paddingTop: 27 },
-  footerRule: { height: 1, backgroundColor: colors.line, alignSelf: "stretch", marginBottom: 17 },
-  footerBrand: { color: colors.green, fontSize: 9, fontWeight: "900", letterSpacing: 2 },
-  footerText: { color: colors.muted, fontSize: 10, marginTop: 5 },
+  sourceTitle: { color: colors.ink, fontSize: 10, fontWeight: "800", lineHeight: 15 },
+  sourcePublisher: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  sourceChevron: { color: colors.muted, fontSize: 21, marginLeft: 3 },
+  noSources: { backgroundColor: colors.soft, borderRadius: 14, padding: 13 },
+  noSourcesTitle: { color: colors.ink, fontSize: 10, fontWeight: "900" },
+  noSourcesText: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 5 },
+  tabBar: { height: 64, flexDirection: "row", alignItems: "center", justifyContent: "space-around", backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 14 },
+  tabButton: { width: 76, alignItems: "center", justifyContent: "center", minHeight: 58 },
+  tabIconWrap: { width: 31, height: 27, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  tabIconWrapSelected: { backgroundColor: colors.blueTint },
+  tabIcon: { color: colors.muted, fontSize: 18, lineHeight: 22, fontWeight: "700" },
+  tabIconSelected: { color: colors.blueDark },
+  tabLabel: { color: colors.muted, fontSize: 7, fontWeight: "800", marginTop: 2 },
+  tabLabelSelected: { color: colors.blueDark },
 });
