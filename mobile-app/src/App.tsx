@@ -20,14 +20,15 @@ import { MAX_IMAGE_BYTES, MAX_QUESTION_CHARS, SUPPORTED_IMAGE_TYPES } from "./co
 import type { DiagnosisResult, ImageSelection } from "./types";
 
 const colors = {
-  ink: "#172222",
-  muted: "#617270",
-  paper: "#F4F7F3",
+  ink: "#152622",
+  muted: "#647570",
+  paper: "#F3F6F1",
   white: "#FFFFFF",
-  green: "#176B57",
-  greenDark: "#104F42",
-  mint: "#E2F0E9",
-  line: "#DDE6E0",
+  green: "#176B52",
+  greenDark: "#103F34",
+  mint: "#E1EFE7",
+  line: "#DCE5DE",
+  soft: "#EBF1EC",
   amber: "#FFF1D8",
   amberInk: "#80551A",
   red: "#A33731",
@@ -61,11 +62,15 @@ function friendlyImage(asset: ImagePicker.ImagePickerAsset): ImageSelection | nu
 
 function ActionButton({
   label,
+  hint,
+  icon,
   onPress,
   disabled = false,
   secondary = false,
 }: {
   label: string;
+  hint: string;
+  icon: string;
   onPress: () => void;
   disabled?: boolean;
   secondary?: boolean;
@@ -83,7 +88,12 @@ function ActionButton({
         pressed && !disabled && styles.pressedButton,
       ]}
     >
-      <Text style={[styles.actionText, secondary && styles.secondaryActionText]}>{label}</Text>
+      <View style={styles.actionIcon}><Text style={[styles.actionIconText, secondary && styles.secondaryActionIconText]}>{icon}</Text></View>
+      <View style={styles.actionCopy}>
+        <Text style={[styles.actionText, secondary && styles.secondaryActionText]}>{label}</Text>
+        <Text style={[styles.actionHint, secondary && styles.secondaryActionHint]}>{hint}</Text>
+      </View>
+      <Text style={[styles.actionChevron, secondary && styles.secondaryActionChevron]}>›</Text>
     </Pressable>
   );
 }
@@ -94,6 +104,8 @@ export default function App() {
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const questionPrompts = ["What does this mean?", "How can I fix it?"];
 
   const chooseFromLibrary = async () => {
     setError(null);
@@ -194,25 +206,27 @@ export default function App() {
           keyboardShouldPersistTaps="handled"
         >
         <View style={styles.header}>
-          <View style={styles.brandMark}><Text style={styles.brandGlyph}>S</Text></View>
+          <View style={styles.brandMark}><Text style={styles.brandGlyph}>⌕</Text></View>
           <View style={styles.brandCopy}>
             <Text style={styles.brandName}>SNAPLENS <Text style={styles.brandAI}>AI</Text></Text>
             <Text style={styles.brandCaption}>VISUAL TROUBLESHOOTING</Text>
           </View>
-          <View style={styles.onlinePill}><View style={styles.onlineDot} /><Text style={styles.onlineText}>READY</Text></View>
+          <View style={styles.onlinePill}><View style={styles.onlineDot} /><Text style={styles.onlineText}>PHOTO GUIDE</Text></View>
         </View>
 
         <View style={styles.hero}>
-          <Text style={styles.eyebrow}>A CLEARER WAY TO FIX THINGS</Text>
-          <Text style={styles.title}>Show us what’s{ "\n" }going on.</Text>
-          <Text style={styles.subtitle}>Take a photo, ask your question, and get practical guidance with sources you can check.</Text>
+          <View style={styles.heroGlow} />
+          <View style={styles.heroTopline}><View style={styles.heroSpark}><Text style={styles.heroSparkText}>✦</Text></View><Text style={styles.eyebrow}>YOUR EVERYDAY REPAIR GUIDE</Text></View>
+          <Text style={styles.title}>See it.{"\n"}Understand it.</Text>
+          <Text style={styles.subtitle}>A photo and a good question are all you need to get started.</Text>
+          <View style={styles.heroFooter}><View style={styles.heroFooterLine} /><Text style={styles.heroFooterText}>PHOTO  <Text style={styles.heroFooterArrow}>→</Text>  PRACTICAL GUIDANCE</Text></View>
         </View>
 
         <View style={styles.stepHeading}>
           <View style={styles.stepNumber}><Text style={styles.stepNumberText}>01</Text></View>
           <View style={styles.stepCopy}>
-            <Text style={styles.stepTitle}>Add a photo</Text>
-            <Text style={styles.stepHint}>A label, error code, or the whole device works.</Text>
+            <Text style={styles.stepTitle}>Show us the issue</Text>
+            <Text style={styles.stepHint}>Capture an error message, label, or device.</Text>
           </View>
         </View>
 
@@ -231,33 +245,43 @@ export default function App() {
           </View>
         ) : (
           <View style={styles.photoPlaceholder}>
-            <View style={styles.cameraIcon}><Text style={styles.cameraGlyph}>⌁</Text></View>
-            <Text style={styles.placeholderTitle}>Your photo goes here</Text>
+            <View style={styles.cameraIcon}><Text style={styles.cameraGlyph}>⌗</Text></View>
+            <Text style={styles.placeholderTitle}>Add a photo to get started</Text>
             <Text style={styles.placeholderText}>Keep the device and any error message in focus.</Text>
+            <View style={styles.formatPill}><Text style={styles.formatText}>JPG  ·  PNG  ·  WEBP  ·  UP TO 10 MB</Text></View>
           </View>
         )}
 
         <View style={styles.photoActions}>
-          <View style={styles.actionColumn}><ActionButton label="Take a photo" onPress={takePhoto} disabled={isLoading} /></View>
-          <View style={styles.actionColumn}><ActionButton label="Choose photo" onPress={chooseFromLibrary} secondary disabled={isLoading} /></View>
+          <View style={styles.actionColumn}><ActionButton label="Take a photo" hint="Use your camera" icon="◉" onPress={takePhoto} disabled={isLoading} /></View>
+          <View style={styles.actionColumn}><ActionButton label="Choose photo" hint="From your gallery" icon="▧" onPress={chooseFromLibrary} secondary disabled={isLoading} /></View>
         </View>
 
         <View style={[styles.stepHeading, styles.questionHeading]}>
           <View style={styles.stepNumber}><Text style={styles.stepNumberText}>02</Text></View>
           <View style={styles.stepCopy}>
-            <Text style={styles.stepTitle}>What do you want to know?</Text>
-            <Text style={styles.stepHint}>A specific question helps us find the right guidance.</Text>
+            <Text style={styles.stepTitle}>What would you like to know?</Text>
+            <Text style={styles.stepHint}>Add a question so we can focus the guidance.</Text>
           </View>
         </View>
 
+        <View style={styles.promptRow}>
+          {questionPrompts.map((prompt) => (
+            <Pressable key={prompt} accessibilityRole="button" onPress={() => { setQuestion(prompt); setResult(null); setError(null); }} style={({ pressed }) => [styles.promptChip, pressed && styles.promptChipPressed]}>
+              <Text style={styles.promptChipText}>{prompt}</Text>
+            </Pressable>
+          ))}
+        </View>
+
         <View style={styles.inputCard}>
+          <Text style={styles.inputLabel}>YOUR QUESTION</Text>
           <TextInput
             accessibilityLabel="Your troubleshooting question"
             editable={!isLoading}
             multiline
             maxLength={MAX_QUESTION_CHARS}
             onChangeText={(value) => { setQuestion(value); setResult(null); setError(null); }}
-            placeholder="For example: What does this blinking red light mean?"
+            placeholder="Describe what you’re seeing…"
             placeholderTextColor="#87948F"
             returnKeyType="default"
             style={styles.questionInput}
@@ -359,64 +383,87 @@ export default function App() {
 
 const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: colors.paper },
-  scrollContent: { paddingHorizontal: 22, paddingTop: 18, paddingBottom: 42, maxWidth: 720, width: "100%", alignSelf: "center" },
-  header: { flexDirection: "row", alignItems: "center", minHeight: 54 },
-  brandMark: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
-  brandGlyph: { color: colors.white, fontSize: 24, fontWeight: "800", fontStyle: "italic" },
-  brandCopy: { marginLeft: 11, flex: 1 },
-  brandName: { color: colors.ink, fontWeight: "900", letterSpacing: 1.2, fontSize: 15 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 42, maxWidth: 720, width: "100%", alignSelf: "center" },
+  header: { flexDirection: "row", alignItems: "center", minHeight: 52, marginBottom: 5 },
+  brandMark: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.greenDark, alignItems: "center", justifyContent: "center" },
+  brandGlyph: { color: colors.white, fontSize: 26, lineHeight: 30, fontWeight: "700" },
+  brandCopy: { marginLeft: 10, flex: 1 },
+  brandName: { color: colors.ink, fontWeight: "900", letterSpacing: 1.1, fontSize: 14 },
   brandAI: { color: colors.green, fontWeight: "700" },
-  brandCaption: { color: colors.muted, fontSize: 9, letterSpacing: 1.55, marginTop: 3 },
+  brandCaption: { color: colors.muted, fontSize: 8, letterSpacing: 1.35, marginTop: 3 },
   onlinePill: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, backgroundColor: colors.mint },
   onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green, marginRight: 6 },
-  onlineText: { color: colors.greenDark, fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-  hero: { paddingTop: 38, paddingBottom: 26 },
-  eyebrow: { color: colors.green, fontSize: 10, fontWeight: "800", letterSpacing: 2.1, marginBottom: 12 },
-  title: { fontSize: 39, lineHeight: 43, fontWeight: "800", color: colors.ink, letterSpacing: -1.6 },
-  subtitle: { marginTop: 13, color: colors.muted, fontSize: 15, lineHeight: 23, maxWidth: 540 },
-  stepHeading: { flexDirection: "row", alignItems: "center", marginBottom: 13 },
-  stepNumber: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center", marginRight: 11 },
-  stepNumberText: { color: colors.green, fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
+  onlineText: { color: colors.greenDark, fontSize: 8, fontWeight: "800", letterSpacing: 0.85 },
+  hero: { backgroundColor: colors.greenDark, paddingHorizontal: 22, paddingTop: 21, paddingBottom: 18, borderRadius: 25, overflow: "hidden", marginTop: 9, marginBottom: 27, minHeight: 214 },
+  heroGlow: { position: "absolute", width: 190, height: 190, borderRadius: 95, backgroundColor: "#1A5747", right: -78, top: -72, borderWidth: 1, borderColor: "#286451" },
+  heroTopline: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
+  heroSpark: { width: 21, height: 21, borderRadius: 8, backgroundColor: "#2B6B55", alignItems: "center", justifyContent: "center", marginRight: 8 },
+  heroSparkText: { color: "#D3E9D9", fontSize: 12, fontWeight: "700" },
+  eyebrow: { color: "#C2D9CB", fontSize: 8, fontWeight: "800", letterSpacing: 1.45 },
+  title: { fontSize: 34, lineHeight: 37, fontWeight: "800", color: colors.white, letterSpacing: -1.15 },
+  subtitle: { marginTop: 9, color: "#D4E4DB", fontSize: 12, lineHeight: 18, maxWidth: 290 },
+  heroFooter: { flexDirection: "row", alignItems: "center", marginTop: 17 },
+  heroFooterLine: { height: 1, width: 24, backgroundColor: "#8AB49C", marginRight: 9 },
+  heroFooterText: { color: "#C8DED0", fontSize: 8, fontWeight: "800", letterSpacing: 1.15 },
+  heroFooterArrow: { color: "#95C4A6" },
+  stepHeading: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  stepNumber: { width: 35, height: 35, borderRadius: 12, backgroundColor: colors.mint, alignItems: "center", justifyContent: "center", marginRight: 11 },
+  stepNumberText: { color: colors.green, fontSize: 10, fontWeight: "900", letterSpacing: 0.6 },
   stepCopy: { flex: 1 },
-  stepTitle: { color: colors.ink, fontSize: 15, fontWeight: "800" },
-  stepHint: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 2 },
-  photoPlaceholder: { minHeight: 174, borderWidth: 1, borderStyle: "dashed", borderColor: "#B8CBC0", borderRadius: 18, backgroundColor: "#EDF3EE", alignItems: "center", justifyContent: "center", padding: 20 },
-  cameraIcon: { width: 43, height: 43, borderRadius: 15, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", marginBottom: 11 },
-  cameraGlyph: { color: colors.green, fontSize: 28, lineHeight: 32, fontWeight: "700" },
-  placeholderTitle: { color: colors.ink, fontWeight: "800", fontSize: 14 },
-  placeholderText: { color: colors.muted, fontSize: 11, marginTop: 5, textAlign: "center" },
-  photoCard: { borderRadius: 18, overflow: "hidden", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line },
-  preview: { width: "100%", height: 215, backgroundColor: "#E8ECE8" },
-  photoMeta: { paddingHorizontal: 14, paddingVertical: 11, flexDirection: "row", alignItems: "center" },
+  stepTitle: { color: colors.ink, fontSize: 14, fontWeight: "800", letterSpacing: -0.15 },
+  stepHint: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  photoPlaceholder: { minHeight: 168, borderWidth: 1, borderStyle: "dashed", borderColor: "#B8CBC0", borderRadius: 21, backgroundColor: "#EDF3EE", alignItems: "center", justifyContent: "center", padding: 18 },
+  cameraIcon: { width: 43, height: 43, borderRadius: 15, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", marginBottom: 10, borderWidth: 1, borderColor: "#E5ECE6" },
+  cameraGlyph: { color: colors.green, fontSize: 25, lineHeight: 30, fontWeight: "700" },
+  placeholderTitle: { color: colors.ink, fontWeight: "800", fontSize: 13 },
+  placeholderText: { color: colors.muted, fontSize: 10, lineHeight: 15, marginTop: 5, textAlign: "center" },
+  formatPill: { backgroundColor: "#E3ECE5", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5, marginTop: 11 },
+  formatText: { color: colors.muted, fontSize: 7, fontWeight: "800", letterSpacing: 0.8 },
+  photoCard: { borderRadius: 21, overflow: "hidden", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, shadowColor: "#253C30", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 2 },
+  preview: { width: "100%", height: 220, backgroundColor: "#E8ECE8" },
+  photoMeta: { paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center" },
   photoMetaCopy: { flex: 1 },
   photoName: { color: colors.ink, fontSize: 12, fontWeight: "700" },
   photoSize: { color: colors.muted, marginTop: 3, fontSize: 10 },
   removeButton: { paddingHorizontal: 10, paddingVertical: 7 },
   removeText: { color: colors.red, fontSize: 11, fontWeight: "700" },
-  photoActions: { flexDirection: "row", gap: 10, marginTop: 11 },
+  photoActions: { flexDirection: "row", gap: 10, marginTop: 10 },
   actionColumn: { flex: 1 },
-  actionButton: { minHeight: 45, borderRadius: 13, backgroundColor: colors.green, alignItems: "center", justifyContent: "center", paddingHorizontal: 10, borderWidth: 1, borderColor: colors.green },
+  actionButton: { minHeight: 59, borderRadius: 16, backgroundColor: colors.green, alignItems: "center", justifyContent: "center", paddingHorizontal: 9, borderWidth: 1, borderColor: colors.green, flexDirection: "row" },
   secondaryButton: { backgroundColor: colors.white, borderColor: colors.line },
   disabledButton: { opacity: 0.5 },
   pressedButton: { opacity: 0.82, transform: [{ scale: 0.985 }] },
-  actionText: { color: colors.white, fontSize: 12, fontWeight: "800" },
+  actionIcon: { width: 31, height: 31, borderRadius: 11, backgroundColor: "#2B7A61", alignItems: "center", justifyContent: "center", marginRight: 8 },
+  actionIconText: { color: colors.white, fontSize: 17, fontWeight: "700" },
+  secondaryActionIconText: { color: colors.green },
+  actionCopy: { flex: 1 },
+  actionText: { color: colors.white, fontSize: 10, fontWeight: "800" },
   secondaryActionText: { color: colors.ink },
-  questionHeading: { marginTop: 28 },
-  inputCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 16, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 },
-  questionInput: { minHeight: 92, color: colors.ink, fontSize: 14, lineHeight: 21, padding: 0 },
-  charCount: { alignSelf: "flex-end", color: colors.muted, fontSize: 10, marginTop: 4 },
-  errorBox: { backgroundColor: "#FDEAE7", borderColor: "#F1C5BE", borderWidth: 1, padding: 13, marginTop: 13, borderRadius: 13 },
+  actionHint: { color: "#D9E9E0", fontSize: 8, marginTop: 3 },
+  secondaryActionHint: { color: colors.muted },
+  actionChevron: { color: "#D9E9E0", fontSize: 20, marginLeft: 2 },
+  secondaryActionChevron: { color: colors.muted },
+  questionHeading: { marginTop: 27 },
+  promptRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 10 },
+  promptChip: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 7 },
+  promptChipPressed: { backgroundColor: colors.mint, borderColor: "#BFD5C7" },
+  promptChipText: { color: colors.greenDark, fontSize: 9, fontWeight: "700" },
+  inputCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 8 },
+  inputLabel: { color: colors.muted, fontSize: 8, fontWeight: "800", letterSpacing: 1.1, marginBottom: 7 },
+  questionInput: { minHeight: 75, color: colors.ink, fontSize: 13, lineHeight: 20, padding: 0 },
+  charCount: { alignSelf: "flex-end", color: colors.muted, fontSize: 9, marginTop: 4 },
+  errorBox: { backgroundColor: "#FDEAE7", borderColor: "#F1C5BE", borderWidth: 1, padding: 14, marginTop: 13, borderRadius: 16 },
   errorTitle: { color: colors.red, fontWeight: "800", fontSize: 12 },
   errorText: { color: "#713A36", fontSize: 12, lineHeight: 18, marginTop: 4 },
   retryButton: { alignSelf: "flex-start", paddingTop: 8 },
   retryText: { color: colors.red, fontSize: 12, fontWeight: "800", textDecorationLine: "underline" },
-  submitButton: { marginTop: 15, minHeight: 54, paddingHorizontal: 17, backgroundColor: colors.green, borderRadius: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9 },
+  submitButton: { marginTop: 14, minHeight: 56, paddingHorizontal: 17, backgroundColor: colors.green, borderRadius: 17, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, shadowColor: colors.greenDark, shadowOpacity: 0.18, shadowRadius: 9, shadowOffset: { width: 0, height: 5 }, elevation: 3 },
   submitDisabled: { backgroundColor: "#A4B8AE" },
   submitPressed: { backgroundColor: colors.greenDark },
-  submitText: { color: colors.white, fontSize: 14, fontWeight: "800" },
+  submitText: { color: colors.white, fontSize: 13, fontWeight: "800", letterSpacing: 0.1 },
   submitArrow: { color: colors.white, fontSize: 21, marginLeft: 4, marginTop: -2 },
   privacyNote: { color: colors.muted, textAlign: "center", fontSize: 10, lineHeight: 16, marginTop: 10, paddingHorizontal: 16 },
-  resultSection: { marginTop: 31 },
+  resultSection: { marginTop: 29, backgroundColor: colors.soft, borderRadius: 23, padding: 14 },
   resultHeading: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
   resultCheck: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.green, justifyContent: "center", alignItems: "center", marginRight: 11 },
   resultCheckText: { color: colors.white, fontSize: 18, fontWeight: "800" },
