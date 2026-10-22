@@ -274,7 +274,7 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.app}>
         <StatusBar barStyle="dark-content" backgroundColor={colors.canvas} />
-        <KeyboardAvoidingView style={styles.appContent} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+        <KeyboardAvoidingView style={styles.appContent} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.topBar}>
           <View style={styles.brandIcon}><Text style={styles.brandIconText}>◎</Text></View>
           <View style={styles.brandCopy}>
@@ -284,7 +284,7 @@ export default function App() {
           <View style={styles.topBadge}><View style={styles.topBadgeDot} /><Text style={styles.topBadgeText}>PHOTO FIRST</Text></View>
         </View>
 
-        <Animated.View style={[styles.screenContent, { opacity: screenOpacity, transform: [{ translateY: screenOffset }] }]}>
+        <Animated.View style={activeTab === "diagnose" ? styles.screenContent : [styles.screenContent, { opacity: screenOpacity, transform: [{ translateY: screenOffset }] }]}>
           {activeTab === "home" ? (
             <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.greeting}>YOUR PERSONAL VISUAL ASSISTANT</Text>
