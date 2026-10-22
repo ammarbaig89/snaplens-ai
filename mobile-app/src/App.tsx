@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   ActivityIndicator,
   Alert,
+  Easing,
   Image,
   Keyboard,
   Linking,
@@ -101,16 +103,18 @@ function TabButton({
   icon,
   selected,
   onPress,
+  prominent = false,
 }: {
   label: string;
   icon: string;
   selected: boolean;
   onPress: () => void;
+  prominent?: boolean;
 }) {
   return (
-    <Pressable accessibilityRole="tab" accessibilityState={{ selected }} onPress={onPress} style={styles.tabButton}>
-      <View style={[styles.tabIconWrap, selected && styles.tabIconWrapSelected]}>
-        <Text style={[styles.tabIcon, selected && styles.tabIconSelected]}>{icon}</Text>
+    <Pressable accessibilityRole="tab" accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.tabButton, prominent && styles.tabButtonProminent, pressed && styles.tabButtonPressed]}>
+      <View style={[styles.tabIconWrap, selected && styles.tabIconWrapSelected, prominent && styles.tabIconProminent, prominent && selected && styles.tabIconProminentSelected]}>
+        <Text style={[styles.tabIcon, selected && styles.tabIconSelected, prominent && styles.tabIconProminentText]}>{icon}</Text>
       </View>
       <Text style={[styles.tabLabel, selected && styles.tabLabelSelected]}>{label}</Text>
     </Pressable>
@@ -125,6 +129,30 @@ export default function App() {
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenOffset = useRef(new Animated.Value(10)).current;
+  const heroFloat = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    screenOpacity.setValue(0);
+    screenOffset.setValue(10);
+    Animated.parallel([
+      Animated.timing(screenOpacity, { toValue: 1, duration: 250, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(screenOffset, { toValue: 0, duration: 290, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, [activeTab, diagnosisStep, screenOpacity, screenOffset]);
+
+  useEffect(() => {
+    if (activeTab !== "home") return;
+    const floatAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(heroFloat, { toValue: 1, duration: 2300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(heroFloat, { toValue: 0, duration: 2300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    floatAnimation.start();
+    return () => floatAnimation.stop();
+  }, [activeTab, heroFloat]);
 
   const beginDiagnosis = () => {
     setActiveTab("diagnose");
@@ -229,7 +257,7 @@ export default function App() {
           <View style={styles.topBadge}><View style={styles.topBadgeDot} /><Text style={styles.topBadgeText}>READY</Text></View>
         </View>
 
-        <View style={styles.screenContent}>
+        <Animated.View style={[styles.screenContent, { opacity: screenOpacity, transform: [{ translateY: screenOffset }] }]}>
           {activeTab === "home" ? (
             <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
               <Text style={styles.greeting}>YOUR PERSONAL VISUAL ASSISTANT</Text>
@@ -237,7 +265,7 @@ export default function App() {
               <Text style={styles.homeIntro}>Get clear, practical guidance for the things you use every day.</Text>
 
               <View style={styles.homeHero}>
-                <View style={styles.heroOrb}><Text style={styles.heroOrbText}>◎</Text></View>
+                <Animated.View style={[styles.heroOrb, { transform: [{ translateY: heroFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }] }]}><Text style={styles.heroOrbText}>◎</Text></Animated.View>
                 <View style={styles.heroTag}><Text style={styles.heroTagText}>SNAP  ·  ASK  ·  SOLVE</Text></View>
                 <Text style={styles.homeHeroTitle}>Turn a confusing{ "\n" }moment into a clear next step.</Text>
                 <Text style={styles.homeHeroBody}>Show us the device or error. We’ll help you understand what you’re seeing.</Text>
@@ -388,11 +416,11 @@ export default function App() {
               ) : null}
             </ScrollView>
           ) : null}
-        </View>
+        </Animated.View>
 
         <View style={styles.tabBar}>
           <TabButton label="Home" icon="⌂" selected={activeTab === "home"} onPress={() => setActiveTab("home")} />
-          <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} />
+          <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} prominent />
           <TabButton label="Guide" icon="✧" selected={activeTab === "guide"} onPress={() => setActiveTab("guide")} />
         </View>
       </SafeAreaView>
@@ -417,7 +445,7 @@ const styles = StyleSheet.create({
   greeting: { color: colors.blue, fontSize: 9, fontWeight: "900", letterSpacing: 1.55, marginTop: 6 },
   homeTitle: { color: colors.ink, fontSize: 29, lineHeight: 34, fontWeight: "900", letterSpacing: -1.1, marginTop: 9 },
   homeIntro: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 8, maxWidth: 310 },
-  homeHero: { backgroundColor: colors.navy, borderRadius: 25, padding: 20, marginTop: 20, minHeight: 237, overflow: "hidden" },
+  homeHero: { backgroundColor: colors.navy, borderRadius: 25, padding: 20, marginTop: 20, minHeight: 237, overflow: "hidden", shadowColor: colors.navy, shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4 },
   heroOrb: { position: "absolute", width: 170, height: 170, borderRadius: 85, right: -49, top: -65, backgroundColor: "#263761", borderWidth: 1, borderColor: "#344976", alignItems: "center", justifyContent: "center" },
   heroOrbText: { color: "#AAB8FC", fontSize: 84, fontWeight: "300", marginTop: 44, marginLeft: -42 },
   heroTag: { alignSelf: "flex-start", backgroundColor: "#29385B", borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6 },
@@ -548,10 +576,15 @@ const styles = StyleSheet.create({
   noSources: { backgroundColor: colors.soft, borderRadius: 14, padding: 13 },
   noSourcesTitle: { color: colors.ink, fontSize: 10, fontWeight: "900" },
   noSourcesText: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 5 },
-  tabBar: { height: 64, flexDirection: "row", alignItems: "center", justifyContent: "space-around", backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 14 },
+  tabBar: { height: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-around", backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 14, shadowColor: colors.navy, shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: -4 }, elevation: 9 },
   tabButton: { width: 76, alignItems: "center", justifyContent: "center", minHeight: 58 },
+  tabButtonProminent: { marginTop: -9 },
+  tabButtonPressed: { opacity: 0.78, transform: [{ scale: 0.96 }] },
   tabIconWrap: { width: 31, height: 27, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   tabIconWrapSelected: { backgroundColor: colors.blueTint },
+  tabIconProminent: { width: 43, height: 43, borderRadius: 16, backgroundColor: colors.blue, shadowColor: colors.blueDark, shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  tabIconProminentSelected: { backgroundColor: colors.blueDark },
+  tabIconProminentText: { color: colors.white, fontSize: 23, lineHeight: 27 },
   tabIcon: { color: colors.muted, fontSize: 18, lineHeight: 22, fontWeight: "700" },
   tabIconSelected: { color: colors.blueDark },
   tabLabel: { color: colors.muted, fontSize: 7, fontWeight: "800", marginTop: 2 },
