@@ -274,7 +274,7 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.app}>
         <StatusBar barStyle="dark-content" backgroundColor={colors.canvas} />
-        <KeyboardAvoidingView style={styles.appContent} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView style={styles.appContent} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
         <View style={styles.topBar}>
           <View style={styles.brandIcon}><Text style={styles.brandIconText}>◎</Text></View>
           <View style={styles.brandCopy}>
@@ -418,7 +418,7 @@ export default function App() {
                   </View>
                   <View style={[styles.inputCard, isQuestionFocused && styles.inputCardFocused]}>
                     <Text style={styles.inputLabel}>YOUR QUESTION</Text>
-                    <TextInput accessibilityLabel="Your troubleshooting question" editable={!isLoading} multiline maxLength={MAX_QUESTION_CHARS} onFocus={() => setIsQuestionFocused(true)} onBlur={() => setIsQuestionFocused(false)} onChangeText={(value) => { setQuestion(value); setError(null); }} placeholder="For example: What does this blinking red light mean?" placeholderTextColor="#929BAA" returnKeyType="default" style={styles.questionInput} textAlignVertical="top" value={question} />
+                    <TextInput accessibilityLabel="Your troubleshooting question" editable={!isLoading} showSoftInputOnFocus autoCapitalize="sentences" autoCorrect multiline blurOnSubmit={false} maxLength={MAX_QUESTION_CHARS} onFocus={() => setIsQuestionFocused(true)} onBlur={() => setIsQuestionFocused(false)} onChangeText={(value) => { setQuestion(value); setError(null); }} placeholder="For example: What does this blinking red light mean?" placeholderTextColor="#929BAA" returnKeyType="default" style={styles.questionInput} textAlignVertical="top" value={question} />
                     <Text style={styles.charCount}>{question.length}/{MAX_QUESTION_CHARS.toLocaleString()}</Text>
                   </View>
                   {error ? <View accessibilityRole="alert" style={styles.errorBox}><Text style={styles.errorTitle}>We couldn’t complete that request</Text><Text style={styles.errorText}>{error}</Text><Pressable accessibilityRole="button" onPress={submit} style={styles.retryButton}><Text style={styles.retryText}>Try again</Text></Pressable></View> : null}
@@ -617,6 +617,7 @@ const styles = StyleSheet.create({
   tabBar: { height: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-around", backgroundColor: colors.white, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 14, shadowColor: colors.navy, shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: -4 }, elevation: 9 },
   tabButton: { width: 76, alignItems: "center", justifyContent: "center", minHeight: 58 },
   tabButtonProminent: { marginTop: -9 },
+  tabButtonDisabled: { opacity: 0.45 },
   tabButtonPressed: { opacity: 0.78, transform: [{ scale: 0.96 }] },
   tabIconWrap: { width: 31, height: 27, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   tabIconWrapSelected: { backgroundColor: colors.blueTint },
