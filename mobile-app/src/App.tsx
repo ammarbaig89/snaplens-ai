@@ -6,8 +6,10 @@ import {
   Easing,
   Image,
   Keyboard,
+  KeyboardAvoidingView,
   Linking,
   Pressable,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -64,6 +66,11 @@ function friendlyImage(asset: ImagePicker.ImagePickerAsset): ImageSelection | nu
   return { uri: asset.uri, name: fileName || `snaplens-photo.${safeExtension}`, mimeType, size: asset.fileSize ?? null };
 }
 
+function sourceHost(value: string): string {
+  const safeUrl = safeCitationUrl(value);
+  return safeUrl ? safeUrl.replace(/^https?:\/\//i, "").split("/")[0] : "Verified source";
+}
+
 function PrimaryButton({
   label,
   onPress,
@@ -104,15 +111,17 @@ function TabButton({
   selected,
   onPress,
   prominent = false,
+  disabled = false,
 }: {
   label: string;
   icon: string;
   selected: boolean;
   onPress: () => void;
   prominent?: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <Pressable accessibilityRole="tab" accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.tabButton, prominent && styles.tabButtonProminent, pressed && styles.tabButtonPressed]}>
+    <Pressable accessibilityRole="tab" accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.tabButton, prominent && styles.tabButtonProminent, disabled && styles.tabButtonDisabled, pressed && styles.tabButtonPressed]}>
       <View style={[styles.tabIconWrap, selected && styles.tabIconWrapSelected, prominent && styles.tabIconProminent, prominent && selected && styles.tabIconProminentSelected]}>
         <Text style={[styles.tabIcon, selected && styles.tabIconSelected, prominent && styles.tabIconProminentText]}>{icon}</Text>
       </View>
@@ -129,6 +138,8 @@ export default function App() {
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPickingPhoto, setIsPickingPhoto] = useState(false);
+  const [isQuestionFocused, setIsQuestionFocused] = useState(false);
   const screenOpacity = useRef(new Animated.Value(0)).current;
   const screenOffset = useRef(new Animated.Value(10)).current;
   const heroFloat = useRef(new Animated.Value(0)).current;
@@ -156,41 +167,65 @@ export default function App() {
 
   const beginDiagnosis = () => {
     setActiveTab("diagnose");
-    setDiagnosisStep("photo");
     setError(null);
   };
 
-  const chooseFromLibrary = async () => {
+  const startNewDiagnosis = () => {
+    setImage(null);
+    setQuestion("");
+    setResult(null);
     setError(null);
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Photo access needed", "Allow photo access to choose a troubleshooting image.");
-      return;
-    }
-    const selection = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.85 });
-    if (!selection.canceled && selection.assets[0]) {
-      const next = friendlyImage(selection.assets[0]);
-      if (next) {
-        setImage(next);
-        setResult(null);
+    setDiagnosisStep("photo");
+    setActiveTab("diagnose");
+  };
+
+  const chooseFromLibrary = async () => {
+    if (isPickingPhoto || isLoading) return;
+    setError(null);
+    setIsPickingPhoto(true);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Photo access needed", "Allow photo access to choose a troubleshooting image.");
+        return;
       }
+      const selection = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.85 });
+      if (!selection.canceled && selection.assets[0]) {
+        const next = friendlyImage(selection.assets[0]);
+        if (next) {
+          setImage(next);
+          setResult(null);
+        }
+      }
+    } catch {
+      Alert.alert("Could not open your photos", "Please try again or use the camera instead.");
+    } finally {
+      setIsPickingPhoto(false);
     }
   };
 
   const takePhoto = async () => {
+    if (isPickingPhoto || isLoading) return;
     setError(null);
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Camera access needed", "Allow camera access to take a troubleshooting photo.");
-      return;
-    }
-    const capture = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.85 });
-    if (!capture.canceled && capture.assets[0]) {
-      const next = friendlyImage(capture.assets[0]);
-      if (next) {
-        setImage(next);
-        setResult(null);
+    setIsPickingPhoto(true);
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Camera access needed", "Allow camera access to take a troubleshooting photo.");
+        return;
       }
+      const capture = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, quality: 0.85 });
+      if (!capture.canceled && capture.assets[0]) {
+        const next = friendlyImage(capture.assets[0]);
+        if (next) {
+          setImage(next);
+          setResult(null);
+        }
+      }
+    } catch {
+      Alert.alert("Could not open your camera", "Please check camera access and try again.");
+    } finally {
+      setIsPickingPhoto(false);
     }
   };
 
@@ -216,15 +251,6 @@ export default function App() {
     }
   };
 
-  const reset = () => {
-    setImage(null);
-    setQuestion("");
-    setError(null);
-    setResult(null);
-    setDiagnosisStep("photo");
-    setActiveTab("home");
-  };
-
   const openSource = async (value: string) => {
     const url = safeCitationUrl(value);
     if (!url) {
@@ -248,18 +274,19 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.app}>
         <StatusBar barStyle="dark-content" backgroundColor={colors.canvas} />
+        <KeyboardAvoidingView style={styles.appContent} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.topBar}>
           <View style={styles.brandIcon}><Text style={styles.brandIconText}>◎</Text></View>
           <View style={styles.brandCopy}>
             <Text style={styles.brandName}>SnapLens <Text style={styles.brandAI}>AI</Text></Text>
             <Text style={styles.brandCaption}>SEE IT. SOLVE IT.</Text>
           </View>
-          <View style={styles.topBadge}><View style={styles.topBadgeDot} /><Text style={styles.topBadgeText}>READY</Text></View>
+          <View style={styles.topBadge}><View style={styles.topBadgeDot} /><Text style={styles.topBadgeText}>PHOTO FIRST</Text></View>
         </View>
 
         <Animated.View style={[styles.screenContent, { opacity: screenOpacity, transform: [{ translateY: screenOffset }] }]}>
           {activeTab === "home" ? (
-            <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.greeting}>YOUR PERSONAL VISUAL ASSISTANT</Text>
               <Text style={styles.homeTitle}>What can we help{ "\n" }you figure out?</Text>
               <Text style={styles.homeIntro}>Get clear, practical guidance for the things you use every day.</Text>
@@ -269,7 +296,7 @@ export default function App() {
                 <View style={styles.heroTag}><Text style={styles.heroTagText}>SNAP  ·  ASK  ·  SOLVE</Text></View>
                 <Text style={styles.homeHeroTitle}>Turn a confusing{ "\n" }moment into a clear next step.</Text>
                 <Text style={styles.homeHeroBody}>Show us the device or error. We’ll help you understand what you’re seeing.</Text>
-                <Pressable accessibilityRole="button" onPress={beginDiagnosis} style={({ pressed }) => [styles.heroCta, pressed && styles.buttonPressed]}>
+                <Pressable accessibilityRole="button" onPress={startNewDiagnosis} style={({ pressed }) => [styles.heroCta, pressed && styles.buttonPressed]}>
                   <Text style={styles.heroCtaText}>Start a diagnosis</Text>
                 </Pressable>
               </View>
@@ -307,7 +334,7 @@ export default function App() {
           ) : null}
 
           {activeTab === "guide" ? (
-            <ScrollView contentContainerStyle={styles.pageContent} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.greeting}>SNAPLENS FIELD GUIDE</Text>
               <Text style={styles.pageTitle}>A little prep goes a long way.</Text>
               <Text style={styles.pageIntro}>Use these tips to help SnapLens understand what you’re seeing.</Text>
@@ -333,7 +360,7 @@ export default function App() {
                 <Text style={styles.questionTipLabel}>GOOD QUESTIONS ARE SPECIFIC</Text>
                 <Text style={styles.questionTipText}>“What does this paper jam message mean?” gives us more to work with than “Help.”</Text>
               </View>
-              <PrimaryButton label="Start a diagnosis" icon="＋" onPress={beginDiagnosis} />
+              <PrimaryButton label="Start a diagnosis" icon="＋" onPress={startNewDiagnosis} />
             </ScrollView>
           ) : null}
 
@@ -360,7 +387,7 @@ export default function App() {
                   {image ? (
                     <View style={styles.selectedPhotoCard}>
                       <Image source={{ uri: image.uri }} style={styles.selectedPreview} resizeMode="cover" accessibilityLabel="Selected troubleshooting photo" />
-                      <View style={styles.selectedMeta}><View style={styles.selectedMetaCopy}><Text style={styles.selectedName} numberOfLines={1}>{image.name}</Text><Text style={styles.selectedSize}>{imageSizeLabel}</Text></View><Pressable accessibilityRole="button" onPress={() => { setImage(null); setResult(null); }}><Text style={styles.removeText}>Remove</Text></Pressable></View>
+                      <View style={styles.selectedMeta}><View style={styles.selectedMetaCopy}><Text style={styles.selectedName} numberOfLines={1}>{image.name}</Text><Text style={styles.selectedSize}>{imageSizeLabel}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Remove selected photo" onPress={() => { setImage(null); setResult(null); }} style={styles.removeAction}><Text style={styles.removeText}>Remove</Text></Pressable></View>
                     </View>
                   ) : (
                     <View style={styles.uploadCard}>
@@ -371,8 +398,8 @@ export default function App() {
                     </View>
                   )}
                   <View style={styles.photoActions}>
-                    <View style={styles.photoActionColumn}><PrimaryButton label="Take a photo" icon="◉" onPress={takePhoto} disabled={isLoading} /></View>
-                    <View style={styles.photoActionColumn}><PrimaryButton label="Choose photo" icon="▧" onPress={chooseFromLibrary} secondary disabled={isLoading} /></View>
+                    <View style={styles.photoActionColumn}><PrimaryButton label="Take a photo" icon="◉" onPress={takePhoto} busy={isPickingPhoto} disabled={isLoading} /></View>
+                    <View style={styles.photoActionColumn}><PrimaryButton label="Choose photo" icon="▧" onPress={chooseFromLibrary} secondary busy={isPickingPhoto} disabled={isLoading} /></View>
                   </View>
                   <View style={styles.helperCard}><Text style={styles.helperIcon}>✦</Text><Text style={styles.helperText}>Tip: move closer if the error code is small.</Text><Pressable accessibilityRole="button" onPress={() => setActiveTab("guide")}><Text style={styles.helperLink}>Photo tips</Text></Pressable></View>
                   <View style={styles.bottomAction}><PrimaryButton label="Continue to your question" onPress={() => { setError(null); setDiagnosisStep("question"); }} disabled={!image} /></View>
@@ -386,12 +413,12 @@ export default function App() {
                   <Text style={styles.inputLabel}>PICK A STARTING QUESTION</Text>
                   <View style={styles.promptRow}>
                     {["What does this mean?", "How can I fix it?"].map((prompt) => (
-                      <Pressable key={prompt} accessibilityRole="button" onPress={() => { selectedPrompt(prompt); }} style={[styles.promptChip, question === prompt && styles.promptChipSelected]}><Text style={[styles.promptChipText, question === prompt && styles.promptChipTextSelected]}>{prompt}</Text></Pressable>
+                      <Pressable key={prompt} accessibilityRole="button" accessibilityState={{ selected: question === prompt }} onPress={() => { selectedPrompt(prompt); }} style={[styles.promptChip, question === prompt && styles.promptChipSelected]}><Text style={[styles.promptChipText, question === prompt && styles.promptChipTextSelected]}>{prompt}</Text></Pressable>
                     ))}
                   </View>
-                  <View style={styles.inputCard}>
+                  <View style={[styles.inputCard, isQuestionFocused && styles.inputCardFocused]}>
                     <Text style={styles.inputLabel}>YOUR QUESTION</Text>
-                    <TextInput accessibilityLabel="Your troubleshooting question" editable={!isLoading} multiline maxLength={MAX_QUESTION_CHARS} onChangeText={(value) => { setQuestion(value); setError(null); }} placeholder="For example: What does this blinking red light mean?" placeholderTextColor="#929BAA" returnKeyType="default" style={styles.questionInput} textAlignVertical="top" value={question} />
+                    <TextInput accessibilityLabel="Your troubleshooting question" editable={!isLoading} multiline maxLength={MAX_QUESTION_CHARS} onFocus={() => setIsQuestionFocused(true)} onBlur={() => setIsQuestionFocused(false)} onChangeText={(value) => { setQuestion(value); setError(null); }} placeholder="For example: What does this blinking red light mean?" placeholderTextColor="#929BAA" returnKeyType="default" style={styles.questionInput} textAlignVertical="top" value={question} />
                     <Text style={styles.charCount}>{question.length}/{MAX_QUESTION_CHARS.toLocaleString()}</Text>
                   </View>
                   {error ? <View accessibilityRole="alert" style={styles.errorBox}><Text style={styles.errorTitle}>We couldn’t complete that request</Text><Text style={styles.errorText}>{error}</Text><Pressable accessibilityRole="button" onPress={submit} style={styles.retryButton}><Text style={styles.retryText}>Try again</Text></Pressable></View> : null}
@@ -403,15 +430,16 @@ export default function App() {
               {diagnosisStep === "result" && result ? (
                 <View>
                   <View style={styles.resultIntro}><View style={styles.resultIcon}><Text style={styles.resultIconText}>✓</Text></View><View style={styles.resultIntroCopy}><Text style={styles.resultEyebrow}>{result.status === "completed" ? "ANALYSIS COMPLETE" : "ONE MORE DETAIL"}</Text><Text style={styles.resultTitle}>{result.status === "completed" ? "Here’s what we found" : "Let’s narrow it down"}</Text></View></View>
+                  {image ? <View style={styles.resultContextCard}><Image source={{ uri: image.uri }} style={styles.resultThumbnail} resizeMode="cover" accessibilityLabel="Photo used for this diagnosis" /><View style={styles.resultContextCopy}><Text style={styles.resultContextLabel}>YOUR QUESTION</Text><Text style={styles.resultQuestion} numberOfLines={3}>{question}</Text></View></View> : null}
                   <View style={styles.answerCard}><Text style={styles.answerLabel}>SNAPLENS GUIDANCE</Text><Text style={styles.answerText}>{result.answer}</Text></View>
                   {result.warnings.length > 0 ? <View style={styles.warningCard}><Text style={styles.warningHeading}>A note before you continue</Text>{result.warnings.map((warning, index) => <Text key={`${index}-${warning}`} style={styles.warningText}>•  {warning}</Text>)}</View> : null}
                   <View style={styles.sourcesHeader}><Text style={styles.sectionTitle}>Sources</Text><Text style={styles.sectionMeta}>{result.citations.length} references</Text></View>
                   {result.citations.length > 0 ? result.citations.map((citation) => (
                     <Pressable accessibilityRole="link" key={citation.source_id} onPress={() => void openSource(citation.url)} style={({ pressed }) => [styles.sourceCard, pressed && styles.sourcePressed]}>
-                      <View style={styles.sourceIcon}><Text style={styles.sourceIconText}>↗</Text></View><View style={styles.sourceCopy}><Text style={styles.sourceTitle} numberOfLines={2}>{citation.title}</Text><Text style={styles.sourcePublisher} numberOfLines={1}>{citation.publisher || new URL(citation.url).hostname}</Text></View><Text style={styles.sourceChevron}>›</Text>
+                      <View style={styles.sourceIcon}><Text style={styles.sourceIconText}>↗</Text></View><View style={styles.sourceCopy}><Text style={styles.sourceTitle} numberOfLines={2}>{citation.title}</Text><Text style={styles.sourcePublisher} numberOfLines={1}>{citation.publisher || sourceHost(citation.url)}</Text>{citation.snippet ? <Text style={styles.sourceSnippet} numberOfLines={2}>{citation.snippet}</Text> : null}</View><Text style={styles.sourceChevron}>›</Text>
                     </Pressable>
                   )) : <View style={styles.noSources}><Text style={styles.noSourcesTitle}>No verified sources found</Text><Text style={styles.noSourcesText}>Treat this guidance as a starting point and check your device manual before repairs.</Text></View>}
-                  <View style={styles.bottomAction}><PrimaryButton label="Start a new diagnosis" icon="＋" onPress={reset} /></View>
+                  <View style={styles.bottomAction}><PrimaryButton label="Start a new diagnosis" icon="＋" onPress={startNewDiagnosis} /></View>
                 </View>
               ) : null}
             </ScrollView>
@@ -419,10 +447,11 @@ export default function App() {
         </Animated.View>
 
         <View style={styles.tabBar}>
-          <TabButton label="Home" icon="⌂" selected={activeTab === "home"} onPress={() => setActiveTab("home")} />
-          <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} prominent />
-          <TabButton label="Guide" icon="✧" selected={activeTab === "guide"} onPress={() => setActiveTab("guide")} />
+          <TabButton label="Home" icon="⌂" selected={activeTab === "home"} onPress={() => setActiveTab("home")} disabled={isLoading || isPickingPhoto} />
+          <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} prominent disabled={isLoading || isPickingPhoto} />
+          <TabButton label="Guide" icon="✧" selected={activeTab === "guide"} onPress={() => setActiveTab("guide")} disabled={isLoading || isPickingPhoto} />
         </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -430,6 +459,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: colors.canvas },
+  appContent: { flex: 1 },
   topBar: { minHeight: 59, paddingHorizontal: 21, flexDirection: "row", alignItems: "center", backgroundColor: colors.canvas },
   brandIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
   brandIconText: { color: colors.white, fontSize: 25, lineHeight: 30, fontWeight: "700" },
@@ -492,7 +522,7 @@ const styles = StyleSheet.create({
   questionTipLabel: { color: colors.blueDark, fontSize: 8, fontWeight: "900", letterSpacing: 1.2 },
   questionTipText: { color: colors.ink, fontSize: 11, lineHeight: 17, marginTop: 7 },
   flowTopline: { flexDirection: "row", alignItems: "center", marginTop: 5 },
-  backButton: { width: 36, height: 36, borderRadius: 13, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  backButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", marginRight: 10 },
   backArrow: { color: colors.ink, fontSize: 25, lineHeight: 28, marginTop: -3 },
   flowTopCopy: { flex: 1 },
   flowEyebrow: { color: colors.blue, fontSize: 8, fontWeight: "900", letterSpacing: 1.25 },
@@ -515,6 +545,7 @@ const styles = StyleSheet.create({
   selectedMetaCopy: { flex: 1 },
   selectedName: { color: colors.ink, fontSize: 11, fontWeight: "800" },
   selectedSize: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  removeAction: { minWidth: 54, minHeight: 44, alignItems: "center", justifyContent: "center", marginRight: -6 },
   removeText: { color: colors.red, fontSize: 10, fontWeight: "800", paddingHorizontal: 7 },
   photoActions: { flexDirection: "row", gap: 9, marginTop: 10 },
   photoActionColumn: { flex: 1 },
@@ -539,11 +570,12 @@ const styles = StyleSheet.create({
   editLink: { color: colors.blueDark, fontSize: 10, fontWeight: "900", paddingHorizontal: 9 },
   inputLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.05, marginBottom: 8 },
   promptRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 11 },
-  promptChip: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 8 },
+  promptChip: { minHeight: 44, justifyContent: "center", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 22, paddingHorizontal: 13, paddingVertical: 9 },
   promptChipSelected: { backgroundColor: colors.blueTint, borderColor: "#C9D1FF" },
   promptChipText: { color: colors.navy, fontSize: 9, fontWeight: "800" },
   promptChipTextSelected: { color: colors.blueDark },
   inputCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 9 },
+  inputCardFocused: { borderColor: colors.blue, shadowColor: colors.blue, shadowOpacity: 0.1, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   questionInput: { minHeight: 100, color: colors.ink, fontSize: 14, lineHeight: 21, padding: 0 },
   charCount: { alignSelf: "flex-end", color: colors.muted, fontSize: 9, marginTop: 5 },
   errorBox: { backgroundColor: colors.redTint, borderColor: "#F1C9C7", borderWidth: 1, padding: 13, marginTop: 12, borderRadius: 15 },
@@ -558,6 +590,11 @@ const styles = StyleSheet.create({
   resultIntroCopy: { flex: 1 },
   resultEyebrow: { color: colors.teal, fontSize: 8, fontWeight: "900", letterSpacing: 1.2 },
   resultTitle: { color: colors.ink, fontSize: 15, fontWeight: "900", marginTop: 3 },
+  resultContextCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 16, padding: 8, marginBottom: 11 },
+  resultThumbnail: { width: 52, height: 52, borderRadius: 11, backgroundColor: colors.soft },
+  resultContextCopy: { flex: 1, marginLeft: 10 },
+  resultContextLabel: { color: colors.muted, fontSize: 7, fontWeight: "900", letterSpacing: 0.9 },
+  resultQuestion: { color: colors.ink, fontSize: 10, lineHeight: 15, fontWeight: "700", marginTop: 4 },
   answerCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 19, padding: 15 },
   answerLabel: { color: colors.blue, fontSize: 8, fontWeight: "900", letterSpacing: 1.1, marginBottom: 8 },
   answerText: { color: colors.ink, fontSize: 13, lineHeight: 21 },
@@ -572,6 +609,7 @@ const styles = StyleSheet.create({
   sourceCopy: { flex: 1, paddingRight: 5 },
   sourceTitle: { color: colors.ink, fontSize: 10, fontWeight: "800", lineHeight: 15 },
   sourcePublisher: { color: colors.muted, fontSize: 9, marginTop: 3 },
+  sourceSnippet: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 5 },
   sourceChevron: { color: colors.muted, fontSize: 21, marginLeft: 3 },
   noSources: { backgroundColor: colors.soft, borderRadius: 14, padding: 13 },
   noSourcesTitle: { color: colors.ink, fontSize: 10, fontWeight: "900" },
