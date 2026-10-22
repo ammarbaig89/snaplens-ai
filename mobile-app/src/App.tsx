@@ -242,7 +242,7 @@ export default function App() {
                 <Text style={styles.homeHeroTitle}>Turn a confusing{ "\n" }moment into a clear next step.</Text>
                 <Text style={styles.homeHeroBody}>Show us the device or error. We’ll help you understand what you’re seeing.</Text>
                 <Pressable accessibilityRole="button" onPress={beginDiagnosis} style={({ pressed }) => [styles.heroCta, pressed && styles.buttonPressed]}>
-                  <Text style={styles.heroCtaText}>Start a diagnosis</Text><Text style={styles.heroCtaArrow}>→</Text>
+                  <Text style={styles.heroCtaText}>Start a diagnosis</Text>
                 </Pressable>
               </View>
 
@@ -347,7 +347,7 @@ export default function App() {
                     <View style={styles.photoActionColumn}><PrimaryButton label="Choose photo" icon="▧" onPress={chooseFromLibrary} secondary disabled={isLoading} /></View>
                   </View>
                   <View style={styles.helperCard}><Text style={styles.helperIcon}>✦</Text><Text style={styles.helperText}>Tip: move closer if the error code is small.</Text><Pressable accessibilityRole="button" onPress={() => setActiveTab("guide")}><Text style={styles.helperLink}>Photo tips</Text></Pressable></View>
-                  <View style={styles.bottomAction}><PrimaryButton label="Continue to your question" icon="→" onPress={() => { setError(null); setDiagnosisStep("question"); }} disabled={!image} /></View>
+                  <View style={styles.bottomAction}><PrimaryButton label="Continue to your question" onPress={() => { setError(null); setDiagnosisStep("question"); }} disabled={!image} /></View>
                 </View>
               ) : null}
 
@@ -367,7 +367,7 @@ export default function App() {
                     <Text style={styles.charCount}>{question.length}/{MAX_QUESTION_CHARS.toLocaleString()}</Text>
                   </View>
                   {error ? <View accessibilityRole="alert" style={styles.errorBox}><Text style={styles.errorTitle}>We couldn’t complete that request</Text><Text style={styles.errorText}>{error}</Text><Pressable accessibilityRole="button" onPress={submit} style={styles.retryButton}><Text style={styles.retryText}>Try again</Text></Pressable></View> : null}
-                  <View style={styles.bottomAction}><PrimaryButton label={isLoading ? "Looking at your photo…" : "Get troubleshooting help"} icon={isLoading ? undefined : "→"} busy={isLoading} onPress={submit} disabled={!image || !question.trim()} /></View>
+                  <View style={styles.bottomAction}><PrimaryButton label={isLoading ? "Looking at your photo…" : "Get troubleshooting help"} busy={isLoading} onPress={submit} disabled={!image || !question.trim()} /></View>
                   <Text style={styles.privacyNote}>Your photo is used for this request and isn’t saved to conversation history.</Text>
                 </View>
               ) : null}
@@ -426,7 +426,6 @@ const styles = StyleSheet.create({
   homeHeroBody: { color: "#C5CDDC", fontSize: 11, lineHeight: 17, marginTop: 8, maxWidth: 235 },
   heroCta: { minHeight: 42, borderRadius: 13, paddingHorizontal: 13, marginTop: 17, backgroundColor: colors.blue, alignSelf: "flex-start", flexDirection: "row", alignItems: "center" },
   heroCtaText: { color: colors.white, fontSize: 11, fontWeight: "900" },
-  heroCtaArrow: { color: colors.white, fontSize: 16, marginLeft: 13, marginTop: -2 },
   sectionTitleRow: { flexDirection: "row", alignItems: "baseline", marginTop: 24, marginBottom: 11 },
   sectionTitle: { color: colors.ink, flex: 1, fontSize: 15, fontWeight: "900", letterSpacing: -0.2 },
   sectionMeta: { color: colors.muted, fontSize: 10, fontWeight: "700" },
