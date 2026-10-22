@@ -78,3 +78,9 @@ The current first milestone targets Android and iOS through Expo Go. Device
 validation is required for camera permissions, network reachability, and the
 full upload flow because simulators and physical devices have different camera
 and LAN behavior.
+
+Android uses `softwareKeyboardLayoutMode: "pan"` to avoid resizing the
+diagnosis layout when the keyboard opens. This is a native Android setting:
+Expo Go does not rebuild its Android host from this project's `app.json`, so
+validate the layout change with a native development build. JavaScript UI
+updates still load through Expo Go.

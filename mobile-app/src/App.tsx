@@ -140,21 +140,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isQuestionFocused, setIsQuestionFocused] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const screenOpacity = useRef(new Animated.Value(0)).current;
   const screenOffset = useRef(new Animated.Value(10)).current;
   const heroFloat = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
 
   useEffect(() => {
     screenOpacity.setValue(0);
@@ -458,13 +446,11 @@ export default function App() {
           ) : null}
         </Animated.View>
 
-        {!keyboardVisible ? (
-          <View style={styles.tabBar}>
-            <TabButton label="Home" icon="⌂" selected={activeTab === "home"} onPress={() => setActiveTab("home")} disabled={isLoading || isPickingPhoto} />
-            <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} prominent disabled={isLoading || isPickingPhoto} />
-            <TabButton label="Guide" icon="✧" selected={activeTab === "guide"} onPress={() => setActiveTab("guide")} disabled={isLoading || isPickingPhoto} />
-          </View>
-        ) : null}
+        <View style={styles.tabBar}>
+          <TabButton label="Home" icon="⌂" selected={activeTab === "home"} onPress={() => setActiveTab("home")} disabled={isLoading || isPickingPhoto} />
+          <TabButton label="Diagnose" icon="＋" selected={activeTab === "diagnose"} onPress={beginDiagnosis} prominent disabled={isLoading || isPickingPhoto} />
+          <TabButton label="Guide" icon="✧" selected={activeTab === "guide"} onPress={() => setActiveTab("guide")} disabled={isLoading || isPickingPhoto} />
+        </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -590,7 +576,7 @@ const styles = StyleSheet.create({
   promptChipTextSelected: { color: colors.blueDark },
   inputCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 13, paddingTop: 12, paddingBottom: 9 },
   inputCardFocused: { borderColor: colors.blue, shadowColor: colors.blue, shadowOpacity: 0.1, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  questionInput: { minHeight: 100, color: colors.ink, fontSize: 14, lineHeight: 21, padding: 0 },
+  questionInput: { minHeight: 170, width: "100%", color: colors.ink, fontSize: 14, lineHeight: 21, padding: 0 },
   charCount: { alignSelf: "flex-end", color: colors.muted, fontSize: 9, marginTop: 5 },
   errorBox: { backgroundColor: colors.redTint, borderColor: "#F1C9C7", borderWidth: 1, padding: 13, marginTop: 12, borderRadius: 15 },
   errorTitle: { color: colors.red, fontWeight: "900", fontSize: 11 },
