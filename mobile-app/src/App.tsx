@@ -1103,25 +1103,27 @@ export default function App() {
             </GlassSurface>
           </View>
         ) : null}
-        <VoiceAssistant
-          visible={voiceOpen}
-          apiBaseUrl={API_BASE_URL}
-          currentScreen={activeTab as VoiceScreen}
-          currentTheme={themeId as VoiceTheme}
-          currentQuestion={question}
-          hasPhoto={Boolean(image)}
-          hasDiagnosis={Boolean(result)}
-          colors={colors}
-          onClose={() => setVoiceOpen(false)}
-          onNavigate={(screen) => setActiveTab(screen as Tab)}
-          onStartNewDiagnosis={startNewDiagnosis}
-          onCheckGateway={checkGateway}
-          onSetTheme={(selectedTheme) => setThemeId(selectedTheme as ThemeId)}
-          onTakePhoto={takePhoto}
-          onChoosePhoto={chooseFromLibrary}
-          onRunDiagnosis={runVoiceDiagnosis}
-          onOpenSource={openVoiceSource}
-        />
+        {voiceOpen ? (
+          <VoiceAssistant
+            visible={voiceOpen}
+            apiBaseUrl={API_BASE_URL}
+            currentScreen={activeTab as VoiceScreen}
+            currentTheme={themeId as VoiceTheme}
+            currentQuestion={question}
+            hasPhoto={Boolean(image)}
+            hasDiagnosis={Boolean(result)}
+            colors={colors}
+            onClose={() => setVoiceOpen(false)}
+            onNavigate={(screen) => setActiveTab(screen as Tab)}
+            onStartNewDiagnosis={startNewDiagnosis}
+            onCheckGateway={checkGateway}
+            onSetTheme={(selectedTheme) => setThemeId(selectedTheme as ThemeId)}
+            onTakePhoto={takePhoto}
+            onChoosePhoto={chooseFromLibrary}
+            onRunDiagnosis={runVoiceDiagnosis}
+            onOpenSource={openVoiceSource}
+          />
+        ) : null}
         </GlassBlurTargetContext.Provider>
       </SafeAreaView>
     </SafeAreaProvider>

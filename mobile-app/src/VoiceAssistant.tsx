@@ -353,7 +353,7 @@ export default function VoiceAssistant(props: Props) {
       };
       socket.onclose = (event) => {
         socketRef.current = null;
-        void stream.stop();
+        void safeStopStream();
         setStatus("off");
         if (!closingRef.current && !error && event.code !== 1000) {
           setError(event.reason || "Voice session disconnected. Check that the Gateway has a Deepgram key and voice mode is enabled.");
@@ -369,10 +369,20 @@ export default function VoiceAssistant(props: Props) {
     }
   };
 
+  const safeStopStream = () => {
+    try {
+      if (stream && stream.isStreaming) {
+        stream.stop();
+      }
+    } catch {
+      // Ignore Android native SharedObject already released errors
+    }
+  };
+
   const stopSession = () => {
     closingRef.current = true;
     endAfterReplyRef.current = false;
-    void stream.stop();
+    void safeStopStream();
     stopPlayback();
     audioChunksRef.current = [];
     const socket = socketRef.current;
@@ -383,7 +393,7 @@ export default function VoiceAssistant(props: Props) {
 
   useEffect(() => () => {
     closingRef.current = true;
-    void stream.stop();
+    void safeStopStream();
     stopPlayback();
     socketRef.current?.close();
   }, [stream]);
