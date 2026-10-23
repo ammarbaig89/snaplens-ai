@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { BlurView } from "expo-blur";
+import VoiceMicIcon from "./VoiceMicIcon";
 import {
   createAudioPlayer,
   requestRecordingPermissionsAsync,
@@ -24,6 +25,7 @@ export type VoiceColors = {
   muted: string;
   blue: string;
   blueDark: string;
+  blueTint: string;
   teal: string;
   line: string;
   glassSurface: string;
@@ -398,14 +400,14 @@ export default function VoiceAssistant(props: Props) {
           : "LISTENING · SAY A COMMAND";
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={close}>
       <View style={styles.overlay}>
         <View style={[styles.panel, { backgroundColor: colors.glassSurface, borderColor: colors.glassBorder }]}>
           <BlurView tint="light" intensity={54} style={StyleSheet.absoluteFill} />
           <View style={[styles.header, { borderBottomColor: colors.line }]}>
             <View style={styles.headerCopy}>
-              <Text style={[styles.eyebrow, { color: colors.teal }]}>SNAPLENS · VOICE MODE</Text>
-              <Text style={[styles.title, { color: colors.ink }]}>Your app assistant</Text>
+              <Text style={[styles.eyebrow, { color: colors.teal }]}>SNAPLENS AI</Text>
+              <Text style={[styles.title, { color: colors.ink }]}>Voice assistant</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Close voice assistant" onPress={close} style={[styles.close, { borderColor: colors.line }]}>
               <Text style={[styles.closeText, { color: colors.ink }]}>×</Text>
@@ -420,9 +422,12 @@ export default function VoiceAssistant(props: Props) {
 
           <ScrollView style={styles.transcript} contentContainerStyle={styles.transcriptContent} showsVerticalScrollIndicator={false}>
             {messages.length === 0 ? (
-              <View style={[styles.welcome, { borderColor: colors.line }]}>
+              <View style={styles.welcome}>
+                <View style={[styles.welcomeIcon, { borderColor: colors.glassBorder, backgroundColor: colors.blueTint }]}>
+                  <VoiceMicIcon color={colors.blueDark} size={24} />
+                </View>
                 <Text style={[styles.welcomeTitle, { color: colors.ink }]}>Tell SnapLens what to do</Text>
-              <Text style={[styles.welcomeBody, { color: colors.muted }]}>Try “open the guide,” “start a new diagnosis,” “change my theme to Ocean,” or “check the Gateway.”</Text>
+                <Text style={[styles.welcomeBody, { color: colors.muted }]}>Try “open the guide,” “start a diagnosis,” or “change my theme to Ocean.”</Text>
               </View>
             ) : messages.map((message, index) => (
               <View key={`${index}-${message.role}`} style={[styles.message, message.role === "user" ? styles.userMessage : styles.assistantMessage, { borderColor: colors.line, backgroundColor: message.role === "user" ? `${colors.blue}16` : colors.glassSurface }]}>
@@ -436,7 +441,7 @@ export default function VoiceAssistant(props: Props) {
           <View style={styles.actions}>
             {status === "off" ? (
               <Pressable accessibilityRole="button" disabled={isStarting} onPress={() => void startSession()} style={[styles.primaryButton, { backgroundColor: colors.blue }, isStarting && styles.disabled]}>
-                {isStarting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryIcon}>◎</Text>}
+                {isStarting ? <ActivityIndicator color={colors.white} /> : <VoiceMicIcon color={colors.white} size={18} />}
                 <Text style={styles.primaryLabel}>{isStarting ? "Starting voice…" : "Enable voice assistant"}</Text>
               </Pressable>
             ) : (
@@ -454,35 +459,35 @@ export default function VoiceAssistant(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(13,25,43,0.42)", justifyContent: "flex-end" },
-  panel: { maxHeight: "92%", minHeight: "72%", borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, overflow: "hidden", paddingBottom: 22 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22, paddingTop: 24, paddingBottom: 17, borderBottomWidth: StyleSheet.hairlineWidth },
+  overlay: { flex: 1, backgroundColor: "rgba(13,25,43,0.48)", justifyContent: "center", alignItems: "center", paddingHorizontal: 16, paddingVertical: 22 },
+  panel: { width: "100%", maxWidth: 500, maxHeight: "86%", minHeight: "68%", borderRadius: 26, borderWidth: 1, overflow: "hidden", paddingBottom: 17, shadowColor: "#14233D", shadowOpacity: 0.2, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 14 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 19, paddingTop: 19, paddingBottom: 15, borderBottomWidth: StyleSheet.hairlineWidth },
   headerCopy: { gap: 4 },
-  eyebrow: { fontSize: 10, letterSpacing: 1.6, fontWeight: "800" },
-  title: { fontSize: 22, fontWeight: "800" },
-  close: { width: 40, height: 40, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.45)" },
-  closeText: { fontSize: 27, lineHeight: 29 },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 22, paddingVertical: 13 },
+  eyebrow: { fontSize: 9, letterSpacing: 1.7, fontWeight: "900" },
+  title: { fontSize: 21, fontWeight: "900", letterSpacing: -0.35 },
+  close: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.38)" },
+  closeText: { fontSize: 25, lineHeight: 28 },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 19, paddingVertical: 12 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { flex: 1, fontSize: 10, fontWeight: "800", letterSpacing: 1.1 },
-  transcript: { flex: 1, paddingHorizontal: 18 },
-  transcriptContent: { paddingVertical: 8, gap: 10 },
-  welcome: { borderWidth: 1, borderRadius: 18, padding: 18, marginTop: 8, backgroundColor: "rgba(255,255,255,0.32)" },
-  welcomeTitle: { fontSize: 16, fontWeight: "800" },
-  welcomeBody: { marginTop: 8, fontSize: 13, lineHeight: 20 },
-  message: { maxWidth: "92%", borderWidth: 1, borderRadius: 18, paddingVertical: 11, paddingHorizontal: 13 },
+  transcript: { flex: 1, paddingHorizontal: 16 },
+  transcriptContent: { flexGrow: 1, justifyContent: "center", paddingVertical: 8, gap: 10 },
+  welcome: { alignItems: "center", paddingHorizontal: 18, paddingVertical: 24 },
+  welcomeIcon: { width: 58, height: 58, borderRadius: 20, borderWidth: 1, alignItems: "center", justifyContent: "center", marginBottom: 18 },
+  welcomeTitle: { fontSize: 16, fontWeight: "900", textAlign: "center" },
+  welcomeBody: { marginTop: 8, maxWidth: 260, fontSize: 12, lineHeight: 19, textAlign: "center" },
+  message: { maxWidth: "92%", borderWidth: 1, borderRadius: 16, paddingVertical: 11, paddingHorizontal: 13 },
   userMessage: { alignSelf: "flex-end", borderBottomRightRadius: 6 },
   assistantMessage: { alignSelf: "flex-start", borderBottomLeftRadius: 6 },
   messageRole: { fontSize: 9, fontWeight: "900", letterSpacing: 1, marginBottom: 5 },
   messageBody: { fontSize: 13, lineHeight: 19 },
   errorCard: { borderWidth: 1, borderRadius: 14, padding: 12 },
   errorText: { fontSize: 12, lineHeight: 18 },
-  actions: { paddingHorizontal: 20, paddingTop: 12, gap: 11 },
-  primaryButton: { minHeight: 56, borderRadius: 18, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 10 },
-  primaryIcon: { color: "white", fontSize: 21, fontWeight: "900" },
+  actions: { paddingHorizontal: 18, paddingTop: 10, gap: 10 },
+  primaryButton: { minHeight: 52, borderRadius: 15, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 10 },
   primaryLabel: { color: "white", fontSize: 14, fontWeight: "800" },
   disabled: { opacity: 0.65 },
-  stopButton: { minHeight: 54, borderRadius: 17, borderWidth: 1, flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" },
+  stopButton: { minHeight: 50, borderRadius: 15, borderWidth: 1, flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" },
   stopSquare: { width: 11, height: 11, borderRadius: 3 },
   stopLabel: { fontSize: 13, fontWeight: "800" },
   privacy: { textAlign: "center", fontSize: 10, lineHeight: 16, paddingHorizontal: 14 },

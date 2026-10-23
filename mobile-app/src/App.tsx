@@ -29,6 +29,7 @@ import { API_BASE_URL } from "./config";
 import { MAX_IMAGE_BYTES, MAX_QUESTION_CHARS, SUPPORTED_IMAGE_TYPES } from "./config";
 import type { DiagnosisResult, ImageSelection } from "./types";
 import VoiceAssistant, { type VoiceScreen, type VoiceTheme } from "./VoiceAssistant";
+import VoiceMicIcon from "./VoiceMicIcon";
 
 LogBox.ignoreLogs([
   "Response.blob() is using React Native's Blob",
@@ -603,7 +604,15 @@ export default function App() {
             <Text style={styles.brandName}>SnapLens <Text style={styles.brandAI}>AI</Text></Text>
             <Text style={styles.brandCaption}>SEE IT. SOLVE IT.</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Open voice assistant" onPress={() => setVoiceOpen(true)} style={styles.topBadge}><View style={styles.topBadgeDot} /><Text style={styles.topBadgeText}>VOICE</Text></Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open voice assistant"
+            accessibilityHint="Starts the hands-free SnapLens assistant"
+            onPress={() => setVoiceOpen(true)}
+            style={({ pressed }) => [styles.topMicButton, pressed && styles.buttonPressed]}
+          >
+            <VoiceMicIcon color={colors.blueDark} size={21} />
+          </Pressable>
         </View>
 
         <Animated.View style={[styles.screenContent, { transform: [{ translateY: screenOffset }] }]}>
@@ -1135,15 +1144,13 @@ return StyleSheet.create({
   menuButton: { width: 38, height: 38, borderRadius: 13, marginRight: 8, alignItems: "center", justifyContent: "center", backgroundColor: colors.glassSurface, borderWidth: 1, borderColor: colors.glassBorder, overflow: "hidden" },
   menuLine: { width: 15, height: 2, borderRadius: 2, backgroundColor: colors.navy, marginVertical: 1.5 },
   menuLineShort: { width: 10, alignSelf: "flex-start", marginLeft: 10 },
-  brandIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center", shadowColor: colors.blueDark, shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 2, height: 3 }, elevation: 3 },
-  brandIconText: { color: colors.white, fontSize: 25, lineHeight: 30, fontWeight: "700" },
   brandCopy: { marginLeft: 10, flex: 1 },
   brandName: { color: colors.ink, fontWeight: "900", fontSize: 16, letterSpacing: -0.4 },
   brandAI: { color: colors.blue, fontWeight: "800" },
   brandCaption: { color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.5, marginTop: 3 },
-  topBadge: { backgroundColor: colors.glassSurface, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: 20, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 7 },
-  topBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.teal, marginRight: 6 },
-  topBadgeText: { color: colors.navy, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  brandIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center", shadowColor: colors.blueDark, shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 2, height: 3 }, elevation: 3 },
+  brandIconText: { color: colors.white, fontSize: 25, lineHeight: 30, fontWeight: "700" },
+  topMicButton: { width: 42, height: 42, borderRadius: 15, backgroundColor: colors.glassSurface, borderWidth: 1, borderColor: colors.glassBorder, alignItems: "center", justifyContent: "center", shadowColor: colors.navy, shadowOpacity: 0.08, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   screenContent: { flex: 1 },
   pageContent: { paddingHorizontal: 20, paddingTop: 13, paddingBottom: 28, maxWidth: 720, width: "100%", alignSelf: "center" },
   greeting: { color: colors.blue, fontSize: 9, fontWeight: "900", letterSpacing: 1.55, marginTop: 6 },
