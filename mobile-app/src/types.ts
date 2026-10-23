@@ -22,6 +22,7 @@ export type ImageSelection = {
   name: string;
   mimeType: string;
   size: number | null;
+  base64?: string | null;
 };
 
 export type ApiError = {

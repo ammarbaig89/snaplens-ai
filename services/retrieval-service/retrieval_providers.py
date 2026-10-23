@@ -133,6 +133,21 @@ class TavilyRetrievalProvider:
                 "The search provider did not respond in time.",
                 504,
             ) from error
+        except httpx.HTTPStatusError as error:
+            status = error.response.status_code
+            if status == 429:
+                code = "RETRIEVAL_PROVIDER_RATE_LIMITED"
+                message = "Tavily reached its search limit. Wait before trying again or check the API plan's remaining credits."
+            elif status in {401, 403}:
+                code = "RETRIEVAL_PROVIDER_ACCESS_DENIED"
+                message = "Tavily rejected the API key. Check that the configured key is active."
+            elif status == 400:
+                code = "RETRIEVAL_PROVIDER_REQUEST_REJECTED"
+                message = "Tavily rejected the search request. Check the configured search settings."
+            else:
+                code = "RETRIEVAL_PROVIDER_UNAVAILABLE"
+                message = "The search provider is temporarily unavailable. Try again shortly."
+            raise RetrievalProviderError(code, message, 503 if status != 400 else 502) from error
         except httpx.HTTPError as error:
             raise RetrievalProviderError(
                 "RETRIEVAL_PROVIDER_UNAVAILABLE",

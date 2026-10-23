@@ -241,7 +241,25 @@ class GeminiVisionProvider:
                 "The Vision provider did not respond in time.",
                 504,
             ) from error
+        except httpx.HTTPStatusError as error:
+            status = error.response.status_code
+            if status == 429:
+                code = "VISION_PROVIDER_RATE_LIMITED"
+                message = "Gemini reached its image-analysis limit. Wait a little and try again; if this continues, check the API key's quota."
+            elif status in {401, 403}:
+                code = "VISION_PROVIDER_ACCESS_DENIED"
+                message = "Gemini rejected the API key or model access. Check the configured key and model access."
+            elif status == 400:
+                code = "VISION_PROVIDER_REQUEST_REJECTED"
+                message = "Gemini rejected the image-analysis request. Check the configured model and image format."
+            else:
+                code = "VISION_PROVIDER_UNAVAILABLE"
+                message = "The Vision provider is temporarily unavailable. Try again shortly."
+            raise VisionProviderError(code, message, 503 if status != 400 else 502) from error
         except httpx.HTTPError as error:
+            print(f"DEBUG GEMINI HTTPError: {type(error)} - {error}")
+            if hasattr(error, "response") and error.response is not None:
+                print(f"DEBUG GEMINI response text: {error.response.text}")
             raise VisionProviderError(
                 "VISION_PROVIDER_UNAVAILABLE",
                 "The Vision provider is temporarily unavailable.",

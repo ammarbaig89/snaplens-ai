@@ -1,8 +1,9 @@
 """HTTP boundary for the LangGraph diagnosis workflow."""
 
+import logging
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, File, Form, Header, Response, UploadFile
+from fastapi import FastAPI, File, Form, Header, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 
 from shared import config as _config  # noqa: F401
@@ -28,6 +29,7 @@ from workflow import (
 )
 
 SERVICE_NAME = "diagnostic-orchestrator"
+LOGGER = logging.getLogger(SERVICE_NAME)
 app = FastAPI(
     title="SnapLens Diagnostic Orchestrator",
     version="1.0.0",
@@ -85,19 +87,64 @@ def ready(response: Response) -> ServiceHealth:
     },
     tags=["internal"],
 )
-def accept_diagnosis(
-    question: str = Form(..., min_length=1, max_length=2000),
-    session_id: UUID | None = Form(default=None),
-    image: UploadFile = File(...),
+async def accept_diagnosis(
+    request: Request,
     x_request_id: UUID | None = Header(default=None, alias="X-Request-ID"),
 ) -> DiagnosisResult | JSONResponse:
     request_id = x_request_id or uuid4()
-    content_type = image.content_type
-    content = image.file.read(MAX_IMAGE_BYTES + 1)
-    image.file.close()
     try:
-        validate_image(content_type, content)
+        form = await request.form(max_part_size=MAX_IMAGE_BYTES + 64 * 1024)
+    except Exception as error:
+        return _error_response(
+            request_id, "INVALID_FORM", "Could not parse internal upload form.", 400
+        )
+
+    question_val = form.get("question")
+    if not isinstance(question_val, str) or not question_val.strip():
+        return _error_response(
+            request_id, "VALIDATION_ERROR", "A question is required.", 422
+        )
+    question = question_val.strip()
+
+    session_id_val = form.get("session_id")
+    session_id: UUID | None = None
+    if isinstance(session_id_val, str) and session_id_val:
+        try:
+            session_id = UUID(session_id_val)
+        except ValueError:
+            pass
+
+    print(f"DEBUG ORCHESTRATOR: form keys = {list(form.keys())}, image_val type = {type(form.get('image'))}")
+    image_val = form.get("image")
+    content: bytes
+    content_type: str | None = None
+    if hasattr(image_val, "read"):
+        content_type = getattr(image_val, "content_type", None)
+        read_fn = getattr(image_val, "read")
+        import inspect
+        if inspect.iscoroutinefunction(read_fn):
+            content = await read_fn(MAX_IMAGE_BYTES + 1)
+        else:
+            content = read_fn(MAX_IMAGE_BYTES + 1)
+        if hasattr(image_val, "close"):
+            close_fn = getattr(image_val, "close")
+            if inspect.iscoroutinefunction(close_fn):
+                await close_fn()
+            else:
+                close_fn()
+    elif isinstance(image_val, (bytes, bytearray)):
+        content = bytes(image_val)
+    elif isinstance(image_val, str):
+        content = image_val.encode("latin1")
+    else:
+        return _error_response(
+            request_id, "MISSING_IMAGE", "An image file is required.", 422
+        )
+    print(f"DEBUG ORCHESTRATOR: content len = {len(content)}, content_type = {content_type}")
+    try:
+        resolved_media_type = validate_image(content_type, content)
     except ImageUploadError as error:
+        print(f"DEBUG ORCHESTRATOR: validate_image raised ImageUploadError: {error.code} {error.message}")
         return _error_response(
             request_id, error.code, error.message, error.status_code
         )
@@ -107,7 +154,7 @@ def accept_diagnosis(
         "session_id": session_id or uuid4(),
         "question": question,
         "image": content,
-        "content_type": (content_type or "").split(";", 1)[0].strip().lower(),
+        "content_type": resolved_media_type,
     }
     try:
         result_state = app.state.diagnosis_graph.invoke(state)
@@ -115,4 +162,12 @@ def accept_diagnosis(
     except DiagnosisWorkflowError as error:
         return _error_response(
             request_id, error.code, error.message, error.status_code
+        )
+    except Exception:
+        LOGGER.exception("Diagnosis workflow failed: request_id=%s", request_id)
+        return _error_response(
+            request_id,
+            "DIAGNOSIS_UNEXPECTED_FAILURE",
+            "The diagnosis encountered an internal error. Check the orchestrator terminal using this request ID.",
+            500,
         )

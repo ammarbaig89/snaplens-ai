@@ -1,3 +1,4 @@
+import { Blob as ExpoBlob } from "expo-blob";
 import { API_BASE_URL, MAX_IMAGE_BYTES, MAX_QUESTION_CHARS, SUPPORTED_IMAGE_TYPES } from "./config";
 import type { ApiError, DiagnosisResult, ImageSelection } from "./types";
 
@@ -62,11 +63,26 @@ function isDiagnosisResult(value: unknown): value is DiagnosisResult {
 async function readError(response: Response): Promise<DiagnosisApiError> {
   let message = "SnapLens could not complete the diagnosis. Please try again.";
   let requestId: string | undefined;
+  let errorCode: string | undefined;
+  let hasServerMessage = false;
   try {
-    const payload = await response.json();
-    const detail = payload?.error;
-    if (typeof detail?.message === "string") message = detail.message;
-    if (typeof detail?.request_id === "string") requestId = detail.request_id;
+    const rawText = await response.text();
+    console.error(`[SnapLens Gateway Error Status ${response.status}]:`, rawText);
+    try {
+      const payload = JSON.parse(rawText);
+      const detail = payload?.error || payload?.detail;
+      if (typeof detail === "string") {
+        message = detail;
+        hasServerMessage = true;
+      } else if (typeof detail?.message === "string") {
+        message = detail.message;
+        hasServerMessage = true;
+      }
+      if (typeof detail?.code === "string") errorCode = detail.code;
+      if (typeof payload?.error?.request_id === "string") requestId = payload.error.request_id;
+    } catch {
+      if (rawText) message = rawText;
+    }
     if (response.status === 422) {
       message = "Check that your question and photo are valid, then try again.";
     }
@@ -74,10 +90,12 @@ async function readError(response: Response): Promise<DiagnosisApiError> {
     if (response.status === 413) message = "This photo is too large. Choose an image under 10 MB.";
     else if (response.status === 415) message = "Use a JPEG, PNG, or WebP photo.";
   }
-  if (response.status === 502 || response.status === 503) {
-    message = "The diagnosis service is temporarily unavailable. Try again shortly.";
+  if ((response.status === 502 || response.status === 503) && (!hasServerMessage || errorCode?.startsWith("UPSTREAM_"))) {
+    message = errorCode === "UPSTREAM_FAILURE"
+      ? `The gateway was reached, but an internal diagnosis service failed. Check the backend terminal for request ID ${requestId || "shown in the error log"}.`
+      : "The diagnosis service is temporarily unavailable. Try again shortly.";
   }
-  if (response.status === 504) {
+  if (response.status === 504 && !hasServerMessage) {
     message = "The diagnosis took too long. Check your connection and retry.";
   }
   return new DiagnosisApiError({ message, requestId, status: response.status });
@@ -92,14 +110,24 @@ export async function createDiagnosis(
 
   const form = new FormData();
   form.append("question", question.trim());
-  form.append(
-    "image",
-    {
-      uri: image.uri,
-      name: image.name,
-      type: image.mimeType,
-    } as unknown as Blob,
-  );
+
+  let imageBlob: unknown;
+  if (image.base64) {
+    const binary = atob(image.base64);
+    const array = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      array[i] = binary.charCodeAt(i);
+    }
+    imageBlob = new ExpoBlob([array], { type: image.mimeType });
+  } else {
+    const imageResponse = await fetch(image.uri);
+    const rawBlob = await imageResponse.blob();
+    imageBlob = rawBlob.type ? rawBlob : new ExpoBlob([rawBlob], { type: image.mimeType });
+  }
+
+  const ext = image.mimeType === "image/png" ? "png" : image.mimeType === "image/webp" ? "webp" : "jpg";
+  const fileName = (image.name && image.name.includes(".")) ? image.name : `photo.${ext}`;
+  form.append("image", imageBlob as unknown as Blob, fileName);
 
   let response: Response;
   const controller = new AbortController();
@@ -112,13 +140,15 @@ export async function createDiagnosis(
       signal: controller.signal,
     });
   } catch (error) {
+    console.error("[SnapLens API Error]:", error, "URL:", `${API_BASE_URL}/v1/diagnoses`);
     if (error instanceof Error && error.name === "AbortError") {
       throw new DiagnosisApiError({
         message: "The diagnosis took too long. Check your connection and retry.",
       });
     }
+    const reason = error instanceof Error ? ` (${error.message})` : "";
     throw new DiagnosisApiError({
-      message: `Could not reach the SnapLens Gateway at ${API_BASE_URL}. Check that the backend is running and the app's API address is correct.`,
+      message: `Could not reach the SnapLens Gateway at ${API_BASE_URL}${reason}. Check that the backend is running and the app's API address is correct.`,
     });
   } finally {
     clearTimeout(timeout);

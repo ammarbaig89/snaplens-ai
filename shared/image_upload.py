@@ -100,26 +100,28 @@ def validate_image(content_type: str | None, content: bytes) -> None:
     if not content:
         raise ImageUploadError("EMPTY_IMAGE", "The uploaded image is empty.", 422)
 
+    detected_type: str | None = None
+    if content.startswith(b"\xff\xd8\xff"):
+        detected_type = "image/jpeg"
+    elif content.startswith(b"\x89PNG\r\n\x1a\n"):
+        detected_type = "image/png"
+    elif len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        detected_type = "image/webp"
+
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
+
+    # If media_type is generic or missing, adopt the byte-detected type
+    if not media_type or media_type in ("application/octet-stream", "binary/octet-stream"):
+        media_type = detected_type or ""
+
+    # If the declared media type doesn't match the signature, but bytes are a valid supported image, trust the actual bytes
+    if detected_type and detected_type in ALLOWED_IMAGE_TYPES:
+        media_type = detected_type
+
     if media_type not in ALLOWED_IMAGE_TYPES:
         raise ImageUploadError(
             "UNSUPPORTED_IMAGE_TYPE",
             "Upload a JPEG, PNG, or WebP image.",
             415,
         )
-
-    signatures = {
-        "image/jpeg": content.startswith(b"\xff\xd8\xff"),
-        "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
-        "image/webp": (
-            len(content) >= 12
-            and content.startswith(b"RIFF")
-            and content[8:12] == b"WEBP"
-        ),
-    }
-    if not signatures[media_type]:
-        raise ImageUploadError(
-            "IMAGE_CONTENT_MISMATCH",
-            "The file contents do not match the declared image type.",
-            415,
-        )
+    return media_type

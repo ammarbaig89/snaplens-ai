@@ -124,8 +124,10 @@ the excerpts explicitly support them and device identity is adequate. Never give
 procedural repair instructions for mains electricity, gas, refrigerant,
 pressurized systems, or other hazardous internal repairs; tell the user to stop
 and contact a qualified technician. If evidence, identity, or safety is unclear,
-ask one concise clarifying question and set needs_clarification=true. Cite only
-the supplied source IDs. Return JSON matching the schema."""
+ask one concise clarifying question and set needs_clarification=true.
+Write clean, user-friendly guidance in natural language. Do NOT write source IDs
+or UUIDs into the answer text itself; citations must only be listed in the
+cited_source_ids JSON array. Return JSON matching the schema."""
 
 
 class GeminiAnswerProvider:
@@ -205,6 +207,21 @@ class GeminiAnswerProvider:
                 "The answer provider did not respond in time.",
                 504,
             ) from error
+        except httpx.HTTPStatusError as error:
+            status = error.response.status_code
+            if status == 429:
+                code = "ANSWER_PROVIDER_RATE_LIMITED"
+                message = "Gemini reached its request limit. Wait a little and try again; if this continues, check the API key's quota."
+            elif status in {401, 403}:
+                code = "ANSWER_PROVIDER_ACCESS_DENIED"
+                message = "Gemini rejected the API key or model access. Check the configured key and model access."
+            elif status == 400:
+                code = "ANSWER_PROVIDER_REQUEST_REJECTED"
+                message = "Gemini rejected the answer request. Check the configured model and request settings."
+            else:
+                code = "ANSWER_PROVIDER_UNAVAILABLE"
+                message = "The answer provider is temporarily unavailable. Try again shortly."
+            raise AnswerProviderError(code, message, 503 if status != 400 else 502) from error
         except httpx.HTTPError as error:
             raise AnswerProviderError(
                 "ANSWER_PROVIDER_UNAVAILABLE",

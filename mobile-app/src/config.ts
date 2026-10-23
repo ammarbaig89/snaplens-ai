@@ -1,4 +1,4 @@
-const defaultGatewayUrl = "http://10.0.2.2:8000";
+const defaultGatewayUrl = "http://192.168.100.147:8000";
 
 /** Public client configuration only. Provider credentials stay on the backend. */
 export const API_BASE_URL = (

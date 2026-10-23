@@ -10,6 +10,7 @@ from langgraph.graph import END, START, StateGraph
 
 from shared.contracts import (
     DiagnosisResult,
+    ErrorEnvelope,
     RetrievalSearchRequest,
     RetrievalSearchResponse,
     RetrievedSource,
@@ -45,6 +46,7 @@ class DiagnosisState(TypedDict, total=False):
     content_type: str
     vision: VisionAnalysisResponse
     retrieval: RetrievalSearchResponse
+    warnings: list[str]
     result: DiagnosisResult
 
 
@@ -94,6 +96,21 @@ class VisionServiceClient:
             raise DiagnosisWorkflowError(
                 "VISION_SERVICE_TIMEOUT", "Image analysis timed out.", 504
             ) from error
+        except httpx.HTTPStatusError as error:
+            upstream = _validated_upstream_error(error.response, request_id)
+            if upstream is not None:
+                raise DiagnosisWorkflowError(
+                    upstream.error.code,
+                    upstream.error.message,
+                    error.response.status_code
+                    if error.response.status_code in {502, 503, 504}
+                    else 502,
+                ) from error
+            raise DiagnosisWorkflowError(
+                "VISION_SERVICE_UNAVAILABLE",
+                "Image analysis is temporarily unavailable.",
+                503,
+            ) from error
         except (httpx.HTTPError, ValueError) as error:
             raise DiagnosisWorkflowError(
                 "VISION_SERVICE_UNAVAILABLE",
@@ -142,6 +159,21 @@ class RetrievalServiceClient:
             raise DiagnosisWorkflowError(
                 "RETRIEVAL_SERVICE_TIMEOUT", "Support search timed out.", 504
             ) from error
+        except httpx.HTTPStatusError as error:
+            upstream = _validated_upstream_error(error.response, request.request_id)
+            if upstream is not None:
+                raise DiagnosisWorkflowError(
+                    upstream.error.code,
+                    upstream.error.message,
+                    error.response.status_code
+                    if error.response.status_code in {502, 503, 504}
+                    else 502,
+                ) from error
+            raise DiagnosisWorkflowError(
+                "RETRIEVAL_SERVICE_UNAVAILABLE",
+                "Support search is temporarily unavailable.",
+                503,
+            ) from error
         except httpx.HTTPError as error:
             raise DiagnosisWorkflowError(
                 "RETRIEVAL_SERVICE_UNAVAILABLE",
@@ -181,6 +213,16 @@ def _service_ready(
         return response.status_code == 200
     except httpx.HTTPError:
         return False
+
+
+def _validated_upstream_error(
+    response: httpx.Response, request_id: UUID
+) -> ErrorEnvelope | None:
+    try:
+        error = ErrorEnvelope.model_validate(response.json())
+    except (ValueError, TypeError):
+        return None
+    return error if error.error.request_id == request_id else None
 
 
 def build_workflow(
@@ -231,8 +273,21 @@ def build_workflow(
             model=vision.device.model,
             limit=5,
         )
-        retrieval = retrieval_client.search(request)
-        return {"retrieval": retrieval}
+        try:
+            retrieval = retrieval_client.search(request)
+            return {"retrieval": retrieval}
+        except DiagnosisWorkflowError as error:
+            # Keep image understanding usable when web search is temporarily
+            # down or its free-tier quota is exhausted. The answer node will
+            # return a clarification result and never invent repair steps.
+            return {
+                "retrieval": RetrievalSearchResponse(
+                    request_id=state["request_id"], sources=[]
+                ),
+                "warnings": [
+                    f"Support search is unavailable: {error.message} No repair steps were generated."
+                ],
+            }
 
     def answer_node(state: DiagnosisState) -> dict:
         vision = state["vision"]
@@ -259,6 +314,7 @@ def build_workflow(
                 citations=[],
                 warnings=_unique_warnings(
                     vision.warnings
+                    + state.get("warnings", [])
                     + ["No verified support sources were found; no repair steps were generated."]
                 ),
             )
@@ -269,9 +325,26 @@ def build_workflow(
                 question=state["question"], vision=vision, retrieval=retrieval
             )
         except AnswerProviderError as error:
-            raise DiagnosisWorkflowError(
-                error.code, error.message, error.status_code
-            ) from error
+            # Preserve the useful vision and search results if text generation
+            # hits a provider outage or quota. Returning citations without
+            # synthesized repair advice is safer than failing the whole request.
+            result = DiagnosisResult(
+                request_id=state["request_id"],
+                session_id=state["session_id"],
+                status="needs_clarification",
+                answer=(
+                    "I found support references, but couldn't prepare a verified "
+                    "step-by-step answer right now. Review the sources and confirm "
+                    "they match your exact device model."
+                ),
+                citations=retrieval.sources,
+                warnings=_unique_warnings(
+                    vision.warnings
+                    + state.get("warnings", [])
+                    + [f"Answer generation is unavailable: {error.message} No repair steps were generated."]
+                ),
+            )
+            return {"result": result}
 
         cited_ids = set(draft.cited_source_ids)
         citations = [source for source in retrieval.sources if source.source_id in cited_ids]
@@ -302,6 +375,7 @@ def build_workflow(
             citations=citations,
             warnings=_unique_warnings(
                 vision.warnings
+                + state.get("warnings", [])
                 + draft.warnings
                 + (["Potentially hazardous repair instructions were blocked."] if unsafe_procedure else [])
             ),
