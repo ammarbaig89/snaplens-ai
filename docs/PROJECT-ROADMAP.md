@@ -23,7 +23,7 @@ flow is useful end to end.
 
 ---
 
-## Phase 0 — Project foundation
+## Phase 0 — Project foundation (**COMPLETE**)
 
 **Goal:** Make the repository understandable and establish service boundaries.
 
@@ -36,7 +36,7 @@ flow is useful end to end.
 **Done when:** A developer can identify each service’s purpose and run the
 backend without needing Docker.
 
-## Phase 1 — Gateway and safe image intake
+## Phase 1 — Gateway and safe image intake (**COMPLETE**)
 
 **Goal:** Accept a photo and question through the single public API entry point.
 
@@ -52,7 +52,7 @@ backend without needing Docker.
 **Done when:** The Gateway safely receives a photo and hands it to the
 Orchestrator. Phase 4 later connects that handoff to the diagnosis workflow.
 
-## Phase 2 — Vision Service (**IMPLEMENTED; live verification pending**)
+## Phase 2 — Vision Service (**COMPLETE; refinement ongoing**)
 
 **Goal:** Turn an uploaded image into structured device and error-code details.
 
@@ -69,15 +69,16 @@ Orchestrator. Phase 4 later connects that handoff to the diagnosis workflow.
   never commit the key.
 - [x] Test valid results, unclear images, provider errors, and invalid output.
 - [x] Update the API contract and setup instructions.
-- [ ] Verify one live Gemini Vision request using the key in the local ignored
+- [x] Verify one live Gemini Vision request using the key in the local ignored
   `.env` file.
 
 **Done when:** A direct service request returns a validated structured result.
-Mock mode and provider failure paths are testable offline; live Gemini is
-verified separately after a key is configured. Orchestrator integration is in
-Phase 4.
+Mock mode and provider failure paths are testable offline, and a live Gemini
+request has been verified. Further prompt, output-quality, and provider
+reliability refinements can be made as the app is exercised. Orchestrator
+integration is covered in Phase 4.
 
-## Phase 3 — Retrieval Service (**COMPLETE**)
+## Phase 3 — Retrieval Service (**COMPLETE; refinement ongoing**)
 
 **Goal:** Find useful support information and preserve links for citations.
 
@@ -94,9 +95,11 @@ Phase 4.
 
 **Done when:** Retrieval returns a small, relevant set of traceable sources and
 does not invent source links. Search, extraction, bounded results, error paths,
-and a single live Tavily request have been verified.
+and a single live Tavily request have been verified. Search relevance, source
+quality, extraction coverage, and provider reliability can be refined as the
+app is exercised.
 
-## Phase 4 — Diagnostic Orchestrator and cited answer (**IMPLEMENTED**)
+## Phase 4 — Diagnostic Orchestrator and cited answer (**COMPLETE; refinement ongoing**)
 
 **Goal:** Connect Vision and Retrieval into one useful backend diagnosis.
 
@@ -111,13 +114,14 @@ and a single live Tavily request have been verified.
 - [x] Add grounding and safety instructions; reject citations not returned by
   Retrieval and avoid unsupported or hazardous repair instructions.
 - [x] Add integration tests with mocked Vision, Retrieval, and answer providers.
-- [ ] Verify one live, source-backed Gemini answer after the user configures a
+- [x] Verify one live, source-backed Gemini answer after the user configures a
   Gemini key and intentionally enables Tavily or another real source provider.
 
 **Done when:** One photo-and-question request returns a useful, cited answer, or
-clearly asks the user for more information.
+clearly asks the user for more information. Grounding quality, workflow
+resilience, and answer quality can be refined as we exercise the app.
 
-## Phase 5 — First mobile experience (**IMPLEMENTED; DEVICE CHECK PENDING**)
+## Phase 5 — First mobile experience (**COMPLETE; refinement ongoing**)
 
 **Goal:** Let a user try the core flow on a phone.
 
@@ -127,15 +131,16 @@ clearly asks the user for more information.
 - [x] Add a question field and submit the multipart request to the Gateway.
 - [x] Show loading, validation, network error, and retry states.
 - [x] Display the answer, warnings, and tappable source links.
-- [ ] Test on at least one Android or iOS device/emulator and document setup.
+- [x] Add selectable glass appearance themes across app screens, cards, and
+  navigation.
+- [x] Test on at least one Android or iOS device/emulator and document setup.
 
 **Done when:** A user can capture a photo, ask a question, and read the answer
 and sources in the app.
 
 **Implementation note:** Source and setup instructions are in `mobile-app/`.
-Physical-device or emulator validation remains open because this workspace has
-no Android emulator tooling attached; follow the setup guide to perform that
-last check with Expo Go or an emulator.
+The device check is complete; the mobile experience can continue to receive
+usability, accessibility, and visual refinements.
 
 ## Phase 6 — Conversation history and data storage (**DEFERRED**)
 
@@ -154,17 +159,22 @@ last check with Expo Go or an emulator.
 **Deferred for now:** No PostgreSQL or Redis implementation is part of the
 current image, Vision, Retrieval, and cited-answer work.
 
-## Phase 7 — Voice
+## Phase 7 — App-wide Deepgram voice assistant (**IMPLEMENTED; live check pending**)
 
-**Goal:** Support hands-free questions and spoken answers.
+**Goal:** Let users operate SnapLens and ask for grounded diagnosis hands-free.
 
-- [ ] Add push-to-talk recording and permission handling in the mobile app.
-- [ ] Select and document speech-to-text and text-to-speech providers.
-- [ ] Send transcribed questions through the same diagnosis workflow.
-- [ ] Read answers aloud with controls to stop, replay, or mute.
-- [ ] Handle noisy audio, transcription uncertainty, and provider failures.
+- [x] Add explicit microphone permission and a user-controlled voice session.
+- [x] Use Deepgram Voice Agent for speech recognition, conversation, and speech.
+- [x] Keep the Deepgram key server-side and proxy sessions through the Gateway.
+- [x] Add app tools for screen navigation, new diagnosis, Gateway check, theme changes, camera, and photo library.
+- [x] Run diagnosis through the existing cited diagnosis pipeline and open result sources.
+- [x] Bound concurrent sessions and per-session duration; do not store voice audio.
+- [x] Add visible connection, listening, thinking, speaking, transcript, and error states.
+- [x] Document provider selection, settings, and local configuration.
+- [ ] Add a valid Deepgram key to ignored root `.env`, enable voice, and verify a live session on a phone.
 
-**Done when:** A user can ask a question by voice and hear the grounded answer.
+**Done when:** The app can complete and speak a live app-control or cited-diagnosis
+request on a phone. Live verification requires the user's Deepgram credentials.
 
 ## Phase 8 — AR guidance (**RESEARCH FIRST**)
 
@@ -200,6 +210,7 @@ fallback, or the feature is explicitly postponed with reasons.
   from logs.
 - [ ] Add OpenTelemetry traces and basic service metrics.
 - [ ] Add rate limits, request timeouts, secret management, and dependency checks.
+- [ ] Add client authentication and usage limits before enabling voice on a public deployment.
 - [ ] Add provider cost and latency reporting and an evaluation dataset.
 - [ ] Add CI for formatting/static checks and automated tests.
 - [ ] Keep Docker configuration current and validate Compose when Docker is
@@ -216,20 +227,21 @@ depend on it.
 
 ## Current progress snapshot
 
-- **Completed:** Project foundation, Gateway image intake, Vision Service,
-  Retrieval Service including HTML/PDF extraction, and the LangGraph diagnosis
-  flow through Vision and Retrieval.
+- **Fully completed phases:** Phases 0–5, covering the project foundation,
+  Gateway, Vision, Retrieval, Orchestrator, and first mobile experience.
+  Refinements remain ongoing for the AI services and mobile app.
+- **Verification:** The live Gemini Vision request, live source-backed Gemini
+  answer, Tavily request, and mobile device check are complete. The mobile UI
+  also includes selectable glass themes.
 - **Current implementation:** The public diagnosis endpoint returns a cited
   result or a clarification request. Mock Retrieval remains enabled to preserve
   Tavily credits. Gemini Vision and answer synthesis are configured in the
-  ignored local `.env`; live answer synthesis still needs source-backed testing.
-- **Current milestone:** Phase 5 app implementation is complete. The remaining
-  task is to run it on Expo Go or an emulator and verify camera, network, and
-  upload behavior.
-- **Next after Phase 5 device validation:** Phase 6 conversation history and
-  storage remain deferred until database work is approved for the project.
-- **Deferred:** PostgreSQL, Redis, Docker execution, voice, AR, and offline
-  support until their phases.
+  ignored local `.env`; live Vision and source-backed answer checks are
+  complete.
+- **Next planned phase:** Phase 6 conversation history and storage remain
+  deferred until database work is approved for the project. Phase 7 code is
+  implemented; its live credential and phone verification remain outstanding.
+- **Deferred:** PostgreSQL, Redis, Docker execution, AR, and offline support.
 
 ## Milestone completion routine
 

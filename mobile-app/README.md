@@ -67,6 +67,34 @@ and a completed answer requires retrieved sources. The starter `.env.example`
 remains in mock mode so a fresh clone does not make paid provider requests until
 its owner explicitly enables them.
 
+## Hands-free voice assistant
+
+The app includes an app-wide Deepgram Voice Agent. From Home, tap **VOICE** or
+open the navigation menu and choose **Voice assistant**. Grant microphone
+permission and explicitly enable the session. You can ask it to navigate to an
+app screen, change one of the appearance themes, take or choose a photo, request
+a diagnosis, and open a numbered source from the visible result. Diagnosis
+still runs through the existing Gateway, Orchestrator, Vision, and Retrieval
+services.
+
+Voice credentials stay on the backend. In the ignored repository-root `.env`,
+set `DEEPGRAM_API_KEY` and `VOICE_ASSISTANT_ENABLED=true`, then restart the
+Gateway. Keep `DEEPGRAM_API_KEY` out of this folder's `.env`, all
+`EXPO_PUBLIC_*` variables, and source control. Deepgram's Voice Agent handles
+speech recognition, conversation, and speech output. The managed LLM defaults
+to `open_ai` with `gpt-4o-mini`, accessed through Deepgram; no OpenAI key is
+needed in the mobile app. Your Deepgram account and enabled models determine
+availability and charges.
+
+The microphone stream stops when the user turns off or closes Voice Assistant.
+SnapLens does not persist voice recordings. Voice sessions have server-side
+concurrency and duration limits. Expo Go can load the app-side audio modules;
+rebuild a native app if you change native permission configuration.
+For a physical phone, point `EXPO_PUBLIC_API_BASE_URL` directly to the PC's
+Gateway URL on port `8000` and allow that port through the PC firewall. The
+optional Expo Metro proxy on port `8081` only forwards HTTP diagnosis calls;
+it cannot carry the voice WebSocket connection.
+
 ## Checks
 
 ```powershell

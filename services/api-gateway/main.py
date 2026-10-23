@@ -2,10 +2,12 @@
 
 import logging
 import os
+import asyncio
+import json
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import FastAPI, File, Form, Header, Request, Response, UploadFile
+from fastapi import FastAPI, File, Form, Header, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from shared import config as _config  # noqa: F401
@@ -22,11 +24,17 @@ from shared.image_upload import (
     RequestBodyLimitMiddleware,
     validate_image,
 )
+from voice_assistant import MAX_VOICE_SESSION_SECONDS, voice_assistant_settings
+from websockets.asyncio.client import connect as connect_websocket
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
 SERVICE_NAME = "api-gateway"
 LOGGER = logging.getLogger(SERVICE_NAME)
 ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8001")
 HTTP_TIMEOUT_SECONDS = float(os.getenv("HTTP_TIMEOUT_SECONDS", "90"))
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "").strip()
+VOICE_ASSISTANT_ENABLED = os.getenv("VOICE_ASSISTANT_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+VOICE_SESSIONS = asyncio.Semaphore(max(1, int(os.getenv("VOICE_ASSISTANT_MAX_CONCURRENT_SESSIONS", "2"))))
 
 app = FastAPI(
     title="SnapLens API Gateway",
@@ -250,3 +258,87 @@ async def create_diagnosis(
             ).model_dump(mode="json"),
         )
     return DiagnosisResult.model_validate(result.json())
+
+
+@app.websocket("/v1/voice/session")
+async def voice_session(websocket: WebSocket) -> None:
+    """Privately proxy a bounded voice session to Deepgram's Voice Agent API."""
+    if not VOICE_ASSISTANT_ENABLED or not DEEPGRAM_API_KEY:
+        await websocket.close(code=1011, reason="Voice assistant is not configured on the Gateway.")
+        return
+    await websocket.accept()
+    try:
+        await asyncio.wait_for(VOICE_SESSIONS.acquire(), timeout=2)
+    except TimeoutError:
+        await websocket.send_json({"type": "GatewayError", "code": "VOICE_CAPACITY", "message": "SnapLens is handling its maximum number of voice sessions. Try again shortly."})
+        await websocket.close(code=1013, reason="Voice session capacity reached.")
+        return
+
+    try:
+        async with connect_websocket(
+            "wss://agent.deepgram.com/v1/agent/converse",
+            additional_headers={"Authorization": f"Token {DEEPGRAM_API_KEY}"},
+            max_size=8 * 1024 * 1024,
+            open_timeout=10,
+            ping_interval=20,
+            ping_timeout=20,
+        ) as provider:
+            welcome = await asyncio.wait_for(provider.recv(), timeout=10)
+            if not isinstance(welcome, str):
+                raise WebSocketException("Deepgram sent an unexpected initial message.")
+            try:
+                welcome_message = json.loads(welcome)
+            except ValueError as error:
+                raise WebSocketException("Deepgram sent an invalid welcome message.") from error
+            if welcome_message.get("type") != "Welcome":
+                await websocket.send_text(welcome)
+                raise WebSocketException("Deepgram did not send a welcome message.")
+            await provider.send(voice_assistant_settings())
+
+            async def app_to_deepgram() -> None:
+                while True:
+                    message = await websocket.receive()
+                    if message["type"] == "websocket.disconnect":
+                        return
+                    payload = message.get("bytes")
+                    if payload is not None:
+                        await provider.send(payload)
+                    elif message.get("text") is not None:
+                        await provider.send(message["text"])
+
+            async def deepgram_to_app() -> None:
+                async for payload in provider:
+                    if isinstance(payload, bytes):
+                        await websocket.send_bytes(payload)
+                    else:
+                        await websocket.send_text(payload)
+
+            relays = {
+                asyncio.create_task(app_to_deepgram()),
+                asyncio.create_task(deepgram_to_app()),
+            }
+            done, pending = await asyncio.wait(
+                relays,
+                timeout=MAX_VOICE_SESSION_SECONDS,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+            for task in done:
+                error = task.exception()
+                if error and not isinstance(error, (WebSocketDisconnect, ConnectionClosed)):
+                    LOGGER.warning("Voice session relay ended: %s", type(error).__name__)
+            if not done:
+                await websocket.close(code=1000, reason="Voice session reached its time limit.")
+    except (WebSocketDisconnect, ConnectionClosed):
+        pass
+    except (OSError, TimeoutError, WebSocketException) as error:
+        LOGGER.warning("Deepgram voice connection failed: %s", type(error).__name__)
+        try:
+            await websocket.send_json({"type": "GatewayError", "code": "VOICE_PROVIDER_UNAVAILABLE", "message": "SnapLens could not connect to the voice service. Check the Gateway and Deepgram configuration."})
+            await websocket.close(code=1011, reason="Voice provider unavailable.")
+        except Exception:
+            pass
+    finally:
+        VOICE_SESSIONS.release()

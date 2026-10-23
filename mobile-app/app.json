@@ -24,6 +24,15 @@
           "cameraPermission": "SnapLens uses your camera to take a troubleshooting photo.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "SnapLens uses your microphone only while Voice Assistant is enabled.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
       ]
     ]
   }

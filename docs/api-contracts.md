@@ -44,6 +44,26 @@ Diagnosis result (`200`):
 }
 ```
 
+### `WS /v1/voice/session` — API Gateway
+
+This optional WebSocket proxies a live Deepgram Voice Agent session. It is
+available only when `VOICE_ASSISTANT_ENABLED=true` and `DEEPGRAM_API_KEY` is set
+on the Gateway. The Gateway supplies its server-side authorization header and
+does not return the key to the app. Mobile clients send raw mono, 16 kHz,
+signed 16-bit PCM audio frames and receive provider JSON events plus raw
+24 kHz PCM response audio frames. Text events include conversation transcripts,
+assistant state, and app tool calls.
+
+Supported app tools are screen navigation, starting a fresh diagnosis, checking
+Gateway reachability, appearance theme selection, camera capture, photo-library
+selection, diagnosis through `POST /v1/diagnoses`, opening a citation from the
+current diagnosis result, and ending voice mode.
+The diagnosis tool uses
+the normal cited-answer pipeline. A disabled or unconfigured voice endpoint
+closes the connection; capacity and provider failures return a `GatewayError`
+event when a connection has been accepted. Session duration and concurrent
+session limits are configured on the Gateway.
+
 Invalid fields use FastAPI's `422` response. Invalid or unsupported file types
 return `415`; files larger than 10 MiB return `413`. Gateway upstream errors use:
 

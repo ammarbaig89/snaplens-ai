@@ -27,6 +27,17 @@ passes the service settings into containers; running Docker remains optional.
 | `MAX_IMAGE_BYTES` | Gateway, Orchestrator, Vision | Maximum accepted image and request-body basis | `10485760` (10 MiB) |
 | `ORCHESTRATOR_URL` | API Gateway | Internal Orchestrator address | `http://diagnostic-orchestrator:8001` |
 | `HTTP_TIMEOUT_SECONDS` | API Gateway | Maximum Gateway-to-Orchestrator request time | `90` |
+| `VOICE_ASSISTANT_ENABLED` | API Gateway | Explicitly enables the Deepgram voice WebSocket proxy | `false` |
+| `DEEPGRAM_API_KEY` | API Gateway | Private Deepgram key; required only when voice is enabled | empty in template |
+| `VOICE_ASSISTANT_MAX_CONCURRENT_SESSIONS` | API Gateway | Maximum simultaneous voice sessions | `2` |
+| `VOICE_ASSISTANT_MAX_SESSION_SECONDS` | API Gateway | Maximum duration of one voice connection | `600` |
+| `DEEPGRAM_LISTEN_MODEL` | API Gateway | Deepgram speech recognition model | `flux-general-en` |
+| `DEEPGRAM_THINK_PROVIDER` | Deepgram Voice Agent | Managed language model provider | `open_ai` |
+| `DEEPGRAM_THINK_MODEL` | Deepgram Voice Agent | Managed model for conversation and app commands | `gpt-4o-mini` |
+| `DEEPGRAM_THINK_TEMPERATURE` | Deepgram Voice Agent | Response variability setting | `0.3` |
+| `DEEPGRAM_SPEAK_MODEL` | Deepgram Voice Agent | Deepgram speech generation voice | `aura-2-thalia-en` |
+| `DEEPGRAM_VOICE_LANGUAGE` | Deepgram Voice Agent | Conversation language | `en` |
+| `DEEPGRAM_VOICE_GREETING` | Deepgram Voice Agent | First spoken message when voice connects | SnapLens assistant greeting |
 | `VISION_PROVIDER` | Vision Service | Selects `mock` or `gemini` | `mock` |
 | `VISION_PROVIDER_TIMEOUT_SECONDS` | Vision Service | Gemini request timeout | `30` |
 | `VISION_MAX_OUTPUT_TOKENS` | Vision Service | Bounds Gemini analysis response length | `512` |
@@ -59,6 +70,22 @@ The current local `.env` selects Gemini Vision (`gemini-3.8-flash`) and Gemini
 answer synthesis (`gemini-3.1-flash-lite`) with the same key, while keeping
 Retrieval set to `mock` to preserve Tavily credits. These are local settings
 only; `.env.example` contains empty key placeholders and mock defaults.
+
+## Voice assistant
+
+Voice mode uses the Deepgram Voice Agent WebSocket through the API Gateway.
+Keep `DEEPGRAM_API_KEY` only in the ignored repository-root `.env`; never add it
+to `mobile-app/.env` or an `EXPO_PUBLIC_*` variable. Voice is off by default.
+For intentional local use, set `VOICE_ASSISTANT_ENABLED=true`, add the key, and
+restart the Gateway. Sessions are capped at the configured duration and
+concurrency. The mobile app streams microphone audio only while the user has
+enabled a session; SnapLens does not save voice recordings.
+
+Set model names only to models enabled for the Deepgram account. The default
+thinking model uses Deepgram's managed OpenAI provider and requires no separate
+OpenAI key in SnapLens. Voice service use is subject to the Deepgram account's
+available models and charges. The assistant calls the existing diagnosis
+endpoint and only opens citations returned by that endpoint.
 
 ## Reserved for later phases
 
