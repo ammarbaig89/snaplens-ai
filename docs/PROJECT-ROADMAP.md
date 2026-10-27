@@ -133,6 +133,9 @@ resilience, and answer quality can be refined as we exercise the app.
 - [x] Display the answer, warnings, and tappable source links.
 - [x] Add selectable glass appearance themes across app screens, cards, and
   navigation.
+- [x] Save the selected appearance and restore it when the app starts again.
+- [x] Use a transparent, theme-colored SnapLens mark across the app.
+- [x] Add a theme-aware animated startup intro and matching splash/icon assets.
 - [x] Test on at least one Android or iOS device/emulator and document setup.
 
 **Done when:** A user can capture a photo, ask a question, and read the answer
@@ -237,10 +240,12 @@ depend on it.
   result or a clarification request. Mock Retrieval remains enabled to preserve
   Tavily credits. Gemini Vision and answer synthesis are configured in the
   ignored local `.env`; live Vision and source-backed answer checks are
-  complete.
-- **Next planned phase:** Phase 6 conversation history and storage remain
-  deferred until database work is approved for the project. Phase 7 code is
-  implemented; its live credential and phone verification remain outstanding.
+  complete. The mobile app now restores its chosen appearance and shows a
+  theme-aware animated logo intro.
+- **Next steps:** Phase 6 conversation history and storage remain deferred as
+  requested. Phase 7 code is implemented; live verification still needs a valid
+  Deepgram key and a phone. Continue the remaining Phase 10 reliability,
+  security, CI, and deployment work without Docker while that live check waits.
 - **Deferred:** PostgreSQL, Redis, Docker execution, AR, and offline support.
 
 ## Milestone completion routine

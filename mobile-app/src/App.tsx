@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { BlurTargetView, BlurView } from "expo-blur";
+import { File, Paths } from "expo-file-system";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { createDiagnosis, DiagnosisApiError, safeCitationUrl, validateDiagnosisInput } from "./api";
 import { API_BASE_URL } from "./config";
@@ -86,6 +87,32 @@ const themeOptions: ThemeOption[] = [
     colors: { ...lightColors, ink: "#19373D", muted: "#6B858A", background: "#EAF4F3", canvas: "#EAF4F3", navy: "#153A42", blue: "#167C8C", blueDark: "#126372", blueTint: "rgba(22,124,140,0.12)", teal: "#08A4A2", tealTint: "rgba(8,164,162,0.11)", line: "#D4E7E4", soft: "#E0EFED", glassFeatureBorder: "rgba(22,124,140,0.34)" },
   },
 ];
+
+const logoSource = require("../assets/snaplens-eye.png") as number;
+
+const themePreferenceFileName = "snaplens-theme.txt";
+
+function getBrowserStorage() {
+  return (globalThis as unknown as {
+    localStorage?: { getItem: (key: string) => string | null; setItem: (key: string, value: string) => void };
+  }).localStorage;
+}
+
+async function readSavedTheme(): Promise<string | null> {
+  if (Platform.OS === "web") return getBrowserStorage()?.getItem(themePreferenceFileName) ?? null;
+  const preferenceFile = new File(Paths.document, themePreferenceFileName);
+  return preferenceFile.exists ? (await preferenceFile.text()).trim() : null;
+}
+
+function saveTheme(themeId: ThemeId): void {
+  if (Platform.OS === "web") {
+    getBrowserStorage()?.setItem(themePreferenceFileName, themeId);
+    return;
+  }
+  const preferenceFile = new File(Paths.document, themePreferenceFileName);
+  if (!preferenceFile.exists) preferenceFile.create({ intermediates: true });
+  preferenceFile.write(themeId);
+}
 
 type Tab = "home" | "diagnose" | "activity" | "guide" | "settings" | "about";
 type DiagnosisStep = "photo" | "question" | "result";
@@ -313,6 +340,8 @@ function TabButton({
 
 export default function App() {
   const [themeId, setThemeId] = useState<ThemeId>("light");
+  const [themePreferenceLoaded, setThemePreferenceLoaded] = useState(false);
+  const [showStartup, setShowStartup] = useState(true);
   const theme = themeOptions.find((option) => option.id === themeId) ?? themeOptions[0];
   const colors = theme.colors;
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -334,6 +363,73 @@ export default function App() {
   const drawerProgress = useRef(new Animated.Value(0)).current;
   const screenOffset = useRef(new Animated.Value(0)).current;
   const blurTargetRef = useRef<View>(null);
+  const startupOpacity = useRef(new Animated.Value(1)).current;
+  const startupLogoOpacity = useRef(new Animated.Value(0)).current;
+  const startupLogoScale = useRef(new Animated.Value(0.72)).current;
+  const startupLogoRotation = useRef(new Animated.Value(0)).current;
+  const startupTextOpacity = useRef(new Animated.Value(0)).current;
+  const startupTextOffset = useRef(new Animated.Value(12)).current;
+  const startupRingProgress = useRef(new Animated.Value(0)).current;
+  const startupOrbitRotation = useRef(new Animated.Value(0)).current;
+  const startupHaloOpacity = useRef(new Animated.Value(0)).current;
+  const startupHaloScale = useRef(new Animated.Value(0.82)).current;
+  const startupProgress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let active = true;
+    void readSavedTheme()
+      .then((savedTheme) => {
+        if (active && savedTheme && themeOptions.some((option) => option.id === savedTheme)) {
+          setThemeId(savedTheme as ThemeId);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setThemePreferenceLoaded(true);
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!themePreferenceLoaded) return;
+    try {
+      saveTheme(themeId);
+    } catch {
+      // Keep the selected theme available for this session if device storage is unavailable.
+    }
+  }, [themeId, themePreferenceLoaded]);
+
+  useEffect(() => {
+    if (!themePreferenceLoaded) return;
+
+    const entrance = Animated.parallel([
+      Animated.timing(startupLogoOpacity, { toValue: 1, duration: 360, useNativeDriver: true }),
+      Animated.spring(startupLogoScale, { toValue: 1, friction: 6, tension: 58, useNativeDriver: true }),
+      Animated.timing(startupLogoRotation, { toValue: 1, duration: 560, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(startupHaloOpacity, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.spring(startupHaloScale, { toValue: 1, friction: 8, tension: 48, useNativeDriver: true }),
+      Animated.timing(startupTextOpacity, { toValue: 1, duration: 420, delay: 300, useNativeDriver: true }),
+      Animated.timing(startupTextOffset, { toValue: 0, duration: 420, delay: 300, useNativeDriver: true }),
+      Animated.timing(startupRingProgress, { toValue: 1, duration: 1050, useNativeDriver: true }),
+      Animated.timing(startupOrbitRotation, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(startupProgress, { toValue: 1, duration: 1350, useNativeDriver: false }),
+    ]);
+    entrance.start();
+
+    const dismissTimer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(startupOpacity, { toValue: 0, duration: 380, useNativeDriver: true }),
+        Animated.timing(startupLogoScale, { toValue: 1.06, duration: 380, useNativeDriver: true }),
+      ]).start(({ finished }) => {
+        if (finished) setShowStartup(false);
+      });
+    }, 1450);
+
+    return () => {
+      clearTimeout(dismissTimer);
+      entrance.stop();
+    };
+  }, [themePreferenceLoaded, startupLogoOpacity, startupLogoScale, startupLogoRotation, startupTextOpacity, startupTextOffset, startupRingProgress, startupOrbitRotation, startupHaloOpacity, startupHaloScale, startupProgress, startupOpacity]);
 
   useEffect(() => {
     Animated.timing(drawerProgress, {
@@ -599,7 +695,7 @@ export default function App() {
             
             <View style={styles.menuLine} /><View style={styles.menuLine} /><View style={[styles.menuLine, styles.menuLineShort]} />
           </Pressable>
-          <View style={styles.brandIcon}><Text style={styles.brandIconText}>◎</Text></View>
+          <Image accessibilityLabel="SnapLens eye logo" source={logoSource} style={[styles.brandIcon, { tintColor: colors.blue }]} />
           <View style={styles.brandCopy}>
             <Text style={styles.brandName}>SnapLens <Text style={styles.brandAI}>AI</Text></Text>
             <Text style={styles.brandCaption}>SEE IT. SOLVE IT.</Text>
@@ -789,7 +885,7 @@ export default function App() {
               <Text style={styles.pageIntro}>See it. Solve it. Understand what your device is trying to tell you.</Text>
 
               <GlassSurface style={styles.aboutHero}>
-                <View style={styles.aboutMark}><Text style={styles.aboutMarkText}>◎</Text></View>
+                <Image accessibilityLabel="SnapLens eye logo" source={logoSource} style={[styles.aboutMark, { tintColor: colors.blue }]} />
                 <Text style={styles.aboutHeroTitle}>Clear help starts with what you can see.</Text>
                 <Text style={styles.aboutHeroBody}>SnapLens combines a photo, your question, and supporting sources to make everyday troubleshooting easier to follow.</Text>
               </GlassSurface>
@@ -1048,7 +1144,7 @@ export default function App() {
             <View pointerEvents="none" style={styles.drawerTint} />
             
             <View style={styles.drawerHeader}>
-              <View style={styles.drawerBrandMark}><Text style={styles.drawerBrandMarkText}>◎</Text></View>
+              <Image accessibilityLabel="SnapLens eye logo" source={logoSource} style={[styles.drawerBrandMark, { tintColor: colors.blue }]} />
               <View style={styles.drawerBrandCopy}><Text style={styles.drawerBrandName}>SnapLens <Text style={styles.brandAI}>AI</Text></Text><Text style={styles.drawerBrandCaption}>YOUR VISUAL ASSISTANT</Text></View>
               <Pressable accessibilityRole="button" accessibilityLabel="Close navigation menu" onPress={() => setDrawerOpen(false)} style={styles.drawerClose}><GlassBlur style={StyleSheet.absoluteFill} intensity={34} /><Text style={styles.drawerCloseText}>×</Text></Pressable>
             </View>
@@ -1124,6 +1220,57 @@ export default function App() {
             onOpenSource={openVoiceSource}
           />
         ) : null}
+        {showStartup ? (
+          <Animated.View pointerEvents="auto" style={[styles.startupOverlay, { backgroundColor: colors.background, opacity: startupOpacity }]}>
+            <View style={styles.startupBrand}>
+              <View style={styles.startupMarkStage}>
+                <Animated.View style={[styles.startupHalo, { opacity: startupHaloOpacity, transform: [{ scale: startupHaloScale }] }]} />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.startupRing,
+                    {
+                      opacity: startupRingProgress.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.38, 0] }),
+                      transform: [{ scale: startupRingProgress.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1.42] }) }],
+                    },
+                  ]}
+                />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.startupOrbit,
+                    { transform: [{ rotate: startupOrbitRotation.interpolate({ inputRange: [0, 1], outputRange: ["-28deg", "332deg"] }) }] },
+                  ]}
+                >
+                  <View style={styles.startupOrbitDot} />
+                </Animated.View>
+                <Animated.Image
+                  accessibilityLabel="SnapLens eye logo"
+                  source={logoSource}
+                  style={[
+                    styles.startupLogo,
+                    {
+                      opacity: startupLogoOpacity,
+                      tintColor: colors.blue,
+                      transform: [
+                        { scale: startupLogoScale },
+                        { rotate: startupLogoRotation.interpolate({ inputRange: [0, 1], outputRange: ["-7deg", "0deg"] }) },
+                      ],
+                    },
+                  ]}
+                />
+              </View>
+              <Animated.View style={{ opacity: startupTextOpacity, transform: [{ translateY: startupTextOffset }] }}>
+                <Text style={styles.startupWordmark}>SnapLens <Text style={styles.startupWordmarkAccent}>AI</Text></Text>
+                <Text style={styles.startupTagline}>SEE IT. SOLVE IT.</Text>
+                <Text style={styles.startupDescriptor}>YOUR VISUAL TROUBLESHOOTING ASSISTANT</Text>
+              </Animated.View>
+            </View>
+            <View style={styles.startupLoadingTrack}>
+              <Animated.View style={[styles.startupLoadingFill, { width: startupProgress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
+            </View>
+          </Animated.View>
+        ) : null}
         </GlassBlurTargetContext.Provider>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -1150,8 +1297,7 @@ return StyleSheet.create({
   brandName: { color: colors.ink, fontWeight: "900", fontSize: 16, letterSpacing: -0.4 },
   brandAI: { color: colors.blue, fontWeight: "800" },
   brandCaption: { color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1.5, marginTop: 3 },
-  brandIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center", shadowColor: colors.blueDark, shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 2, height: 3 }, elevation: 3 },
-  brandIconText: { color: colors.white, fontSize: 25, lineHeight: 30, fontWeight: "700" },
+  brandIcon: { width: 44, height: 44 },
   topMicButton: { width: 42, height: 42, borderRadius: 15, backgroundColor: colors.glassSurface, borderWidth: 1, borderColor: colors.glassBorder, alignItems: "center", justifyContent: "center", shadowColor: colors.navy, shadowOpacity: 0.08, shadowRadius: 7, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   screenContent: { flex: 1 },
   pageContent: { paddingHorizontal: 20, paddingTop: 13, paddingBottom: 28, maxWidth: 720, width: "100%", alignSelf: "center" },
@@ -1354,8 +1500,7 @@ return StyleSheet.create({
   drawerBlur: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   drawerTint: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(255,255,255,0.28)" },
   drawerHeader: { minHeight: 58, flexDirection: "row", alignItems: "center", paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "rgba(113,129,152,0.2)" },
-  drawerBrandMark: { width: 42, height: 42, borderRadius: 15, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center", shadowColor: colors.blueDark, shadowOpacity: 0.2, shadowRadius: 5, shadowOffset: { width: 2, height: 3 }, elevation: 3 },
-  drawerBrandMarkText: { color: colors.white, fontSize: 26, fontWeight: "700" },
+  drawerBrandMark: { width: 46, height: 46 },
   drawerBrandCopy: { flex: 1, marginLeft: 10 },
   drawerBrandName: { color: colors.ink, fontSize: 14, fontWeight: "900" },
   drawerBrandCaption: { color: colors.muted, fontSize: 7, letterSpacing: 1.15, fontWeight: "800", marginTop: 4 },
@@ -1437,9 +1582,22 @@ return StyleSheet.create({
   statusDotOnline: { backgroundColor: colors.teal },
   statusDotOffline: { backgroundColor: colors.red },
   aboutHero: { borderRadius: 23, padding: 19, marginBottom: 22, backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line },
-  aboutMark: { width: 49, height: 49, borderRadius: 17, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
-  aboutMarkText: { color: colors.white, fontSize: 30, fontWeight: "700" },
+  aboutMark: { width: 58, height: 58 },
   aboutHeroTitle: { color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: "900", marginTop: 14 },
   aboutHeroBody: { color: colors.muted, fontSize: 10, lineHeight: 16, marginTop: 7 },
+  startupOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 80, elevation: 80, alignItems: "center", justifyContent: "center" },
+  startupBrand: { width: 280, alignItems: "center", justifyContent: "center", marginTop: -34 },
+  startupMarkStage: { width: 210, height: 210, alignItems: "center", justifyContent: "center", marginBottom: 15 },
+  startupHalo: { position: "absolute", width: 154, height: 154, borderRadius: 77, backgroundColor: colors.glassSurface, borderWidth: 1, borderColor: colors.glassBorder, shadowColor: colors.blue, shadowOpacity: 0.15, shadowRadius: 23, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
+  startupRing: { position: "absolute", top: 12, left: 12, width: 186, height: 186, borderRadius: 93, borderWidth: 1, borderColor: colors.glassFeatureBorder },
+  startupOrbit: { position: "absolute", top: 3, left: 3, width: 204, height: 204, borderRadius: 102, alignItems: "center" },
+  startupOrbitDot: { width: 7, height: 7, borderRadius: 4, marginTop: 2, backgroundColor: colors.teal, shadowColor: colors.teal, shadowOpacity: 0.55, shadowRadius: 6, elevation: 3 },
+  startupLogo: { width: 148, height: 148 },
+  startupWordmark: { color: colors.ink, fontSize: 27, fontWeight: "900", letterSpacing: -0.8, textAlign: "center" },
+  startupWordmarkAccent: { color: colors.blue },
+  startupTagline: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2.4, textAlign: "center", marginTop: 7 },
+  startupDescriptor: { color: colors.muted, fontSize: 7, fontWeight: "800", letterSpacing: 1.1, textAlign: "center", marginTop: 28, opacity: 0.72 },
+  startupLoadingTrack: { position: "absolute", bottom: 44, width: 42, height: 3, borderRadius: 2, backgroundColor: colors.blueTint, overflow: "hidden" },
+  startupLoadingFill: { height: "100%", borderRadius: 2, backgroundColor: colors.blue },
 });
 }

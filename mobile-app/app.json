@@ -3,16 +3,23 @@
     "name": "SnapLens AI",
     "slug": "snaplens-ai",
     "version": "0.1.0",
+    "icon": "./assets/snaplens-eye.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/snaplens-eye.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EAF0F8"
+    },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
-        "backgroundColor": "#E8F1FF"
+        "foregroundImage": "./assets/snaplens-eye.png",
+        "backgroundColor": "#EAF0F8"
       },
       "edgeToEdgeEnabled": true
     },
