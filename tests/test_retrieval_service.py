@@ -89,8 +89,12 @@ class RetrievalServiceTests(unittest.TestCase):
         sent = json.loads(requests[0].content)
         self.assertEqual(requests[0].url, "https://api.tavily.com/search")
         self.assertEqual(requests[0].headers["authorization"], "Bearer test-key")
-        self.assertEqual(sent["query"], "How to resolve error E21? Acme WM-100")
+        self.assertEqual(
+            sent["query"],
+            "Acme WM-100 How to resolve error E21? official support troubleshooting",
+        )
         self.assertEqual(sent["max_results"], 2)
+        self.assertTrue(sent["include_usage"])
         self.assertFalse(sent["include_answer"])
         self.assertEqual(len(result.sources), 1)
         source = result.sources[0]

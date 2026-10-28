@@ -16,6 +16,9 @@ export type DiagnosisOverview = {
     model: string | null;
     confidence: number;
   };
+  image_summary?: string | null;
+  visible_issue?: string | null;
+  visual_observations?: string[];
   observed_text: string[];
   error_codes: string[];
 };

@@ -46,6 +46,9 @@ def vision_result(
     category="washing machine",
     codes=None,
     observed=None,
+    image_summary=None,
+    visible_issue=None,
+    visual_observations=None,
 ):
     return VisionAnalysisResponse(
         request_id=REQUEST_ID,
@@ -53,6 +56,9 @@ def vision_result(
         device=DeviceIdentification(
             brand=brand, model=model, category=category, confidence=0.92
         ),
+        image_summary=image_summary,
+        visible_issue=visible_issue,
+        visual_observations=visual_observations or [],
         error_codes=codes or [],
         observed_text=observed or [],
         warnings=[],
@@ -113,7 +119,14 @@ class OrchestratorWorkflowTests(unittest.TestCase):
     def test_unrecognized_image_skips_paid_retrieval(self):
         vision = FakeVisionClient(
             vision_result(
-                "unrecognized", brand=None, model=None, category=None, codes=[], observed=[]
+                "unrecognized",
+                brand=None,
+                model=None,
+                category=None,
+                codes=[],
+                observed=[],
+                image_summary="A printer control panel is visible in the photo.",
+                visual_observations=["The display is centered and legible."],
             )
         )
         retrieval = FakeRetrievalClient([SOURCE])
@@ -132,6 +145,14 @@ class OrchestratorWorkflowTests(unittest.TestCase):
         self.assertEqual(retrieval.requests, [])
         self.assertEqual(state["result"].status, "needs_clarification")
         self.assertIn("couldn't identify", state["result"].answer)
+        self.assertEqual(
+            state["result"].overview.image_summary,
+            "A printer control panel is visible in the photo.",
+        )
+        self.assertEqual(
+            state["result"].overview.visual_observations,
+            ["The display is centered and legible."],
+        )
 
     def test_no_search_results_never_calls_answer_provider(self):
         class MustNotSynthesize:

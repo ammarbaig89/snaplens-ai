@@ -8,7 +8,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import VoiceMicIcon from "./VoiceMicIcon";
 import {
   createAudioPlayer,
@@ -28,6 +27,7 @@ export type VoiceColors = {
   blueTint: string;
   teal: string;
   line: string;
+  canvas: string;
   glassSurface: string;
   glassBorder: string;
   glassFeature: string;
@@ -412,8 +412,7 @@ export default function VoiceAssistant(props: Props) {
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={close}>
       <View style={styles.overlay}>
-        <View style={[styles.panel, { backgroundColor: colors.glassSurface, borderColor: colors.glassBorder }]}>
-          <BlurView tint="light" intensity={54} style={StyleSheet.absoluteFill} />
+        <View style={[styles.panel, { backgroundColor: colors.canvas, borderColor: colors.glassBorder }]}>
           <View style={[styles.header, { borderBottomColor: colors.line }]}>
             <View style={styles.headerCopy}>
               <Text style={[styles.eyebrow, { color: colors.teal }]}>SNAPLENS AI</Text>
@@ -469,8 +468,8 @@ export default function VoiceAssistant(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(13,25,43,0.48)", justifyContent: "center", alignItems: "center", paddingHorizontal: 16, paddingVertical: 22 },
-  panel: { width: "100%", maxWidth: 500, maxHeight: "86%", minHeight: "68%", borderRadius: 26, borderWidth: 1, overflow: "hidden", paddingBottom: 17, shadowColor: "#14233D", shadowOpacity: 0.2, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 14 },
+  overlay: { flex: 1, backgroundColor: "rgba(13,25,43,0.62)", justifyContent: "center", alignItems: "center", paddingHorizontal: 16, paddingVertical: 22 },
+  panel: { width: "100%", maxWidth: 500, maxHeight: "86%", minHeight: "68%", borderRadius: 26, borderWidth: 1, overflow: "hidden", paddingBottom: 17, shadowColor: "#14233D", shadowOpacity: 0.24, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 14 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 19, paddingTop: 19, paddingBottom: 15, borderBottomWidth: StyleSheet.hairlineWidth },
   headerCopy: { gap: 4 },
   eyebrow: { fontSize: 9, letterSpacing: 1.7, fontWeight: "900" },

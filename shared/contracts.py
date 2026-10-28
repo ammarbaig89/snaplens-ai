@@ -34,6 +34,11 @@ class VisionAnalysisResponse(ContractModel):
     request_id: UUID
     result_status: Literal["identified", "ambiguous", "unrecognized"]
     device: DeviceIdentification
+    image_summary: str | None = Field(default=None, max_length=800)
+    visible_issue: str | None = Field(default=None, max_length=800)
+    visual_observations: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=8
+    )
     observed_text: list[Annotated[str, Field(max_length=500)]] = Field(
         default_factory=list, max_length=100
     )
@@ -50,6 +55,11 @@ class DiagnosisOverview(ContractModel):
 
     result_status: Literal["identified", "ambiguous", "unrecognized"]
     device: DeviceIdentification
+    image_summary: str | None = Field(default=None, max_length=800)
+    visible_issue: str | None = Field(default=None, max_length=800)
+    visual_observations: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=8
+    )
     observed_text: list[Annotated[str, Field(max_length=500)]] = Field(
         default_factory=list, max_length=100
     )

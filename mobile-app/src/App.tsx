@@ -1004,13 +1004,13 @@ export default function App() {
                 const completedCount = guidance.steps.filter((s) => completedStepIds[s.id]).length;
                 const overview = result.overview;
                 const device = overview?.device;
-                const deviceTitle = [device?.brand, device?.model].filter(Boolean).join(" ") || device?.category || "Device not identified yet";
+                const deviceTitle = [device?.brand, device?.model].filter(Boolean).join(" ") || device?.category || "Device type not clear from this photo yet";
                 const hasDeviceEvidence = Boolean(device?.brand || device?.model || device?.category);
                 const overviewStatus = overview?.result_status === "identified"
-                  ? "Device details detected"
+                  ? "Visual scan complete"
                   : overview?.result_status === "ambiguous"
-                    ? "Possible device match"
-                    : "Device not confidently identified";
+                    ? "Some identification details are uncertain"
+                    : "Device type is unclear";
                 const confidence = device?.confidence ?? 0;
                 const confidenceLabel = confidence >= 0.8
                   ? "Strong visual match"
@@ -1054,11 +1054,27 @@ export default function App() {
                         ) : null}
 
                         <GlassSurface style={styles.overviewCard}>
-                          <Text style={styles.overviewEyebrow}>WHAT SNAP LENS SAW</Text>
+                          <Text style={styles.overviewEyebrow}>IMAGE OVERVIEW</Text>
                           <Text style={styles.overviewStatus}>{overviewStatus}</Text>
-                          <Text style={styles.overviewDevice}>{deviceTitle}</Text>
+                          {overview?.image_summary ? <Text style={styles.overviewSummary}>{overview.image_summary}</Text> : null}
+                          <View style={styles.overviewGroup}>
+                            <Text style={styles.overviewGroupLabel}>DEVICE</Text>
+                            <Text style={styles.overviewDevice}>{deviceTitle}</Text>
+                            {device?.category && (device?.brand || device?.model) ? <Text style={styles.overviewCategory}>{device.category}</Text> : null}
+                          </View>
                           {overview && hasDeviceEvidence ? <Text style={styles.overviewConfidence}>{confidenceLabel} · {Math.round(confidence * 100)}% visual match estimate</Text> : null}
-                          {device?.category && deviceTitle !== device.category ? <Text style={styles.overviewCategory}>{device.category}</Text> : null}
+                          {overview?.visible_issue ? (
+                            <View style={styles.overviewGroup}>
+                              <Text style={styles.overviewGroupLabel}>VISIBLE ISSUE</Text>
+                              <Text style={styles.overviewIssue}>{overview.visible_issue}</Text>
+                            </View>
+                          ) : null}
+                          {overview?.visual_observations?.length ? (
+                            <View style={styles.overviewGroup}>
+                              <Text style={styles.overviewGroupLabel}>DETAILS SPOTTED</Text>
+                              {overview.visual_observations.slice(0, 4).map((item, index) => <Text key={`${index}-${item}`} style={styles.overviewObservedText}>•  {item}</Text>)}
+                            </View>
+                          ) : null}
                           {overview?.error_codes.length ? (
                             <View style={styles.overviewGroup}>
                               <Text style={styles.overviewGroupLabel}>ERROR CODES</Text>
@@ -1072,6 +1088,7 @@ export default function App() {
                             </View>
                           ) : null}
                           {!overview ? <Text style={styles.overviewFallback}>Image details are unavailable in this response. You can still review the guidance and its sources.</Text> : null}
+                          {overview && !overview.image_summary && !overview.visible_issue && !overview.visual_observations?.length && !overview.observed_text.length && !overview.error_codes.length && !hasDeviceEvidence ? <Text style={styles.overviewFallback}>SnapLens could not extract enough detail from this photo. Try a closer, sharper image with the display or problem area filling more of the frame.</Text> : null}
                         </GlassSurface>
 
                         {result.warnings.length > 0 ? (
@@ -1162,13 +1179,10 @@ export default function App() {
         <Animated.View pointerEvents={drawerOpen ? "auto" : "none"} style={[styles.drawerLayer, { opacity: drawerProgress }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Close navigation menu" onPress={() => setDrawerOpen(false)} style={styles.drawerScrim} />
           <Animated.View style={[styles.drawerPanel, { transform: [{ translateX: drawerProgress.interpolate({ inputRange: [0, 1], outputRange: [-330, 0] }) }] }]}>
-            <GlassBlur style={styles.drawerBlur} intensity={58} />
-            <View pointerEvents="none" style={styles.drawerTint} />
-            
             <View style={styles.drawerHeader}>
               <Image accessibilityLabel="SnapLens eye logo" source={logoSources[themeId]} style={styles.drawerBrandMark} />
               <View style={styles.drawerBrandCopy}><Text style={styles.drawerBrandName}>SnapLens <Text style={styles.brandAI}>AI</Text></Text><Text style={styles.drawerBrandCaption}>YOUR VISUAL ASSISTANT</Text></View>
-              <Pressable accessibilityRole="button" accessibilityLabel="Close navigation menu" onPress={() => setDrawerOpen(false)} style={styles.drawerClose}><GlassBlur style={StyleSheet.absoluteFill} intensity={34} /><Text style={styles.drawerCloseText}>×</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close navigation menu" onPress={() => setDrawerOpen(false)} style={styles.drawerClose}><Text style={styles.drawerCloseText}>×</Text></Pressable>
             </View>
 
             <ScrollView style={styles.drawerScroll} contentContainerStyle={styles.drawerContent} showsVerticalScrollIndicator={false}>
@@ -1180,7 +1194,6 @@ export default function App() {
                 ["guide", "✧", "Field guide", "Photo and question tips"],
               ] as [Tab, string, string, string][]).map(([tab, icon, label, hint]) => (
                 <Pressable key={tab} accessibilityRole="button" accessibilityState={{ selected: activeTab === tab }} onPress={() => navigateTo(tab)} style={({ pressed }) => [styles.drawerItem, activeTab === tab && styles.drawerItemSelected, pressed && styles.drawerItemPressed]}>
-                  <GlassBlur style={StyleSheet.absoluteFill} intensity={26} />
                   <View style={[styles.drawerItemIcon, activeTab === tab && styles.drawerItemIconSelected]}><Text style={[styles.drawerItemIconText, activeTab === tab && styles.drawerItemIconTextSelected]}>{icon}</Text></View>
                   <View style={styles.drawerItemCopy}><Text style={[styles.drawerItemTitle, activeTab === tab && styles.drawerItemTitleSelected]}>{label}</Text><Text style={styles.drawerItemHint}>{hint}</Text></View>
                   {activeTab === tab ? <View style={styles.drawerActiveMark} /> : null}
@@ -1189,7 +1202,6 @@ export default function App() {
 
               <Text style={[styles.drawerSectionLabel, styles.drawerSectionSpaced]}>APP</Text>
               <Pressable accessibilityRole="button" onPress={() => { setDrawerOpen(false); setVoiceOpen(true); }} style={({ pressed }) => [styles.drawerItem, pressed && styles.drawerItemPressed]}>
-                <GlassBlur style={StyleSheet.absoluteFill} intensity={26} />
                 <View style={styles.drawerItemIcon}><Text style={styles.drawerItemIconText}>◎</Text></View>
                 <View style={styles.drawerItemCopy}><Text style={styles.drawerItemTitle}>Voice assistant</Text><Text style={styles.drawerItemHint}>Hands-free app control</Text></View>
               </Pressable>
@@ -1198,7 +1210,6 @@ export default function App() {
                 ["about", "ⓘ", "About SnapLens", "Project information"],
               ] as [Tab, string, string, string][]).map(([tab, icon, label, hint]) => (
                 <Pressable key={tab} accessibilityRole="button" accessibilityState={{ selected: activeTab === tab }} onPress={() => navigateTo(tab)} style={({ pressed }) => [styles.drawerItem, activeTab === tab && styles.drawerItemSelected, pressed && styles.drawerItemPressed]}>
-                  <GlassBlur style={StyleSheet.absoluteFill} intensity={26} />
                   <View style={[styles.drawerItemIcon, activeTab === tab && styles.drawerItemIconSelected]}><Text style={[styles.drawerItemIconText, activeTab === tab && styles.drawerItemIconTextSelected]}>{icon}</Text></View>
                   <View style={styles.drawerItemCopy}><Text style={[styles.drawerItemTitle, activeTab === tab && styles.drawerItemTitleSelected]}>{label}</Text><Text style={styles.drawerItemHint}>{hint}</Text></View>
                   {activeTab === tab ? <View style={styles.drawerActiveMark} /> : null}
@@ -1206,19 +1217,19 @@ export default function App() {
               ))}
             </ScrollView>
 
-            <GlassSurface style={styles.drawerFooter}><View style={styles.drawerFooterDot} /><View style={styles.drawerFooterCopy}><Text style={styles.drawerFooterTitle}>Photo-first troubleshooting</Text><Text style={styles.drawerFooterHint}>Simple guidance, with sources.</Text></View></GlassSurface>
+            <View style={styles.drawerFooter}><View style={styles.drawerFooterDot} /><View style={styles.drawerFooterCopy}><Text style={styles.drawerFooterTitle}>Photo-first troubleshooting</Text><Text style={styles.drawerFooterHint}>Simple guidance, with sources.</Text></View></View>
           </Animated.View>
         </Animated.View>
         {isLoading ? (
           <View style={styles.loadingOverlay} accessibilityViewIsModal>
             <View style={styles.loadingScrim} />
-            <GlassSurface style={styles.loadingCard}>
+            <View style={[styles.loadingCard, { backgroundColor: colors.canvas, borderColor: colors.glassBorder }]}>
               <View style={styles.loadingIcon}><ActivityIndicator size="large" color={colors.blue} /></View>
               <Text style={styles.loadingEyebrow}>SNAPLENS IS WORKING</Text>
               <Text style={styles.loadingTitle}>Analyzing your photo</Text>
               <Text style={styles.loadingBody}>We’re checking the visible details and preparing troubleshooting guidance.</Text>
               <Text style={styles.loadingHint}>This can take a few seconds.</Text>
-            </GlassSurface>
+            </View>
           </View>
         ) : null}
         {voiceOpen ? (
@@ -1437,7 +1448,9 @@ return StyleSheet.create({
   overviewCard: { backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, borderRadius: 18, padding: 16, marginBottom: 13 },
   overviewEyebrow: { color: colors.blueDark, fontSize: 9, fontWeight: "900", letterSpacing: 1.15 },
   overviewStatus: { color: colors.teal, fontSize: 10, fontWeight: "800", marginTop: 10 },
+  overviewSummary: { color: colors.ink, fontSize: 14, lineHeight: 21, fontWeight: "600", marginTop: 8 },
   overviewDevice: { color: colors.ink, fontSize: 19, lineHeight: 25, fontWeight: "900", marginTop: 4 },
+  overviewIssue: { color: colors.ink, fontSize: 13, lineHeight: 19, fontWeight: "700", marginTop: 2 },
   overviewConfidence: { color: colors.muted, fontSize: 9, lineHeight: 14, fontWeight: "700", marginTop: 5 },
   overviewCategory: { color: colors.muted, fontSize: 11, marginTop: 4, textTransform: "capitalize" },
   overviewGroup: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 13, paddingTop: 11 },
@@ -1519,10 +1532,8 @@ return StyleSheet.create({
   tabLabel: { color: colors.muted, fontSize: 8, fontWeight: "800", marginTop: 2 },
   tabLabelSelected: { color: colors.blueDark },
   drawerLayer: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 30, elevation: 30, flexDirection: "row" },
-  drawerScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(19,30,53,0.30)" },
-  drawerPanel: { width: 320, maxWidth: "88%", height: "100%", paddingTop: 12, paddingHorizontal: 14, paddingBottom: 12, backgroundColor: colors.glassSurface, borderRightWidth: 1, borderRightColor: colors.glassBorder, shadowColor: colors.navy, shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 7, height: 0 }, elevation: 9 },
-  drawerBlur: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
-  drawerTint: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(255,255,255,0.28)" },
+  drawerScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(19,30,53,0.48)" },
+  drawerPanel: { width: 320, maxWidth: "88%", height: "100%", paddingTop: 12, paddingHorizontal: 14, paddingBottom: 12, backgroundColor: colors.canvas, borderRightWidth: 1, borderRightColor: colors.glassBorder, shadowColor: colors.navy, shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 7, height: 0 }, elevation: 9 },
   drawerHeader: { minHeight: 58, flexDirection: "row", alignItems: "center", paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "rgba(113,129,152,0.2)" },
   drawerBrandMark: { width: 46, height: 46 },
   drawerBrandCopy: { flex: 1, marginLeft: 10 },
@@ -1552,8 +1563,8 @@ return StyleSheet.create({
   drawerFooterTitle: { color: colors.ink, fontSize: 9, fontWeight: "800" },
   drawerFooterHint: { color: colors.muted, fontSize: 8, marginTop: 4 },
   loadingOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 50, elevation: 50, alignItems: "center", justifyContent: "center", padding: 26 },
-  loadingScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(20,35,61,0.30)" },
-  loadingCard: { width: "100%", maxWidth: 340, alignItems: "center", paddingHorizontal: 25, paddingTop: 25, paddingBottom: 21, borderRadius: 23 },
+  loadingScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(20,35,61,0.48)" },
+  loadingCard: { width: "100%", maxWidth: 340, alignItems: "center", paddingHorizontal: 25, paddingTop: 25, paddingBottom: 21, borderRadius: 23, borderWidth: 1, shadowColor: colors.navy, shadowOpacity: 0.2, shadowRadius: 20, shadowOffset: { width: 0, height: 9 }, elevation: 12 },
   loadingIcon: { width: 58, height: 58, borderRadius: 20, backgroundColor: colors.blueTint, alignItems: "center", justifyContent: "center", marginBottom: 16 },
   loadingEyebrow: { color: colors.teal, fontSize: 8, fontWeight: "900", letterSpacing: 1.4 },
   loadingTitle: { color: colors.ink, fontSize: 17, fontWeight: "900", marginTop: 7, textAlign: "center" },

@@ -173,6 +173,9 @@ class VisionServiceTests(unittest.TestCase):
                 "model": "WM-100",
                 "confidence": 0.91,
             },
+            "image_summary": "A washing machine control panel displays an E21 message.",
+            "visible_issue": "The display shows the E21 error code.",
+            "visual_observations": ["A digital control panel is visible."],
             "observed_text": ["E21"],
             "error_codes": ["E21"],
             "warnings": [],
@@ -207,11 +210,18 @@ class VisionServiceTests(unittest.TestCase):
         sent = json.loads(requests[0].content)
         sent_parts = sent["contents"][0]["parts"]
         self.assertEqual(result.device.brand, "Acme")
+        self.assertEqual(
+            result.image_summary,
+            "A washing machine control panel displays an E21 message.",
+        )
+        self.assertEqual(result.visible_issue, "The display shows the E21 error code.")
+        self.assertEqual(result.visual_observations, ["A digital control panel is visible."])
         self.assertEqual(result.error_codes, ["E21"])
         self.assertEqual(requests[0].headers["x-goog-api-key"], "test-key")
         self.assertEqual(
-            base64.b64decode(sent_parts[1]["inline_data"]["data"]), PNG_BYTES
+            base64.b64decode(sent_parts[0]["inline_data"]["data"]), PNG_BYTES
         )
+        self.assertIn("visual_observations", sent_parts[1]["text"])
 
     def test_gemini_provider_rejects_invalid_model_output(self) -> None:
         transport = httpx.MockTransport(

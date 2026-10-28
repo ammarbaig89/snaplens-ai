@@ -248,6 +248,7 @@ def build_workflow(
             vision.device.brand
             or vision.device.model
             or vision.device.category
+            or vision.visible_issue
             or vision.observed_text
             or vision.error_codes
         )
@@ -258,10 +259,16 @@ def build_workflow(
     def retrieve_node(state: DiagnosisState) -> dict:
         vision = state["vision"]
         details = []
+        if vision.visible_issue:
+            details.append(vision.visible_issue)
         if vision.error_codes:
             details.append("error codes " + ", ".join(vision.error_codes))
         elif vision.observed_text:
             details.append("visible text " + ", ".join(vision.observed_text[:5]))
+        if vision.image_summary:
+            details.append(vision.image_summary)
+        if vision.visual_observations:
+            details.extend(vision.visual_observations[:2])
         if vision.device.category:
             details.append(vision.device.category)
         query = state["question"]
@@ -405,6 +412,9 @@ def _overview(vision: VisionAnalysisResponse) -> DiagnosisOverview:
     return DiagnosisOverview(
         result_status=vision.result_status,
         device=vision.device,
+        image_summary=vision.image_summary,
+        visible_issue=vision.visible_issue,
+        visual_observations=vision.visual_observations,
         observed_text=vision.observed_text,
         error_codes=vision.error_codes,
     )

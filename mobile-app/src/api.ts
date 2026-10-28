@@ -44,6 +44,9 @@ function isDiagnosisOverview(value: unknown): value is DiagnosisOverview {
     (typeof device?.brand === "string" || device?.brand === null) &&
     (typeof device?.model === "string" || device?.model === null) &&
     typeof device?.confidence === "number" &&
+    (overview.image_summary === undefined || overview.image_summary === null || typeof overview.image_summary === "string") &&
+    (overview.visible_issue === undefined || overview.visible_issue === null || typeof overview.visible_issue === "string") &&
+    (overview.visual_observations === undefined || (Array.isArray(overview.visual_observations) && overview.visual_observations.every((item) => typeof item === "string"))) &&
     Array.isArray(overview.observed_text) && overview.observed_text.every((item) => typeof item === "string") &&
     Array.isArray(overview.error_codes) && overview.error_codes.every((item) => typeof item === "string")
   );
