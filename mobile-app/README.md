@@ -17,10 +17,10 @@ Gateway, and displays the answer, safety notes, and source links.
 From this folder in PowerShell:
 
 ```powershell
-npm install
-Copy-Item .env.example .env
+npm ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 # Edit .env and set EXPO_PUBLIC_API_BASE_URL for your environment.
-npm start
+npm start -- --lan
 ```
 
 Press `a` to open an Android emulator, `i` for an available iOS simulator, or

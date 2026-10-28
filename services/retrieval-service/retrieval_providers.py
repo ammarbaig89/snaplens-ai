@@ -1,5 +1,6 @@
 """Provider implementations for support-information retrieval."""
 
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -15,6 +16,8 @@ from shared.contracts import (
     RetrievalSearchResponse,
     RetrievedSource,
 )
+
+LOGGER = logging.getLogger("retrieval-service.tavily")
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,7 @@ class TavilyRetrievalProvider:
             "max_results": request.limit,
             "include_answer": False,
             "include_raw_content": False,
+            "include_usage": True,
         }
         try:
             async with httpx.AsyncClient(
@@ -165,6 +169,9 @@ class TavilyRetrievalProvider:
             raw_results = provider_data["results"]
             if not isinstance(raw_results, list):
                 raise TypeError("results must be a list")
+            usage = provider_data.get("usage")
+            credits = usage.get("credits") if isinstance(usage, dict) else None
+            LOGGER.info("Tavily search returned %d results; reported credits=%s", len(raw_results), credits)
             sources = []
             for result in raw_results[: request.limit]:
                 source = _to_source(
@@ -186,10 +193,17 @@ class TavilyRetrievalProvider:
 
 
 def _build_query(request: RetrievalSearchRequest) -> str:
-    parts = [request.query.strip()]
-    device = " ".join(part.strip() for part in (request.manufacturer, request.model) if part and part.strip())
-    if device:
-        parts.append(device)
+    # Keep the exact device identity at the front so a long user question
+    # cannot truncate the manufacturer/model from Tavily's 400-character query.
+    parts = [
+        part.strip()
+        for part in (request.manufacturer, request.model, request.query)
+        if part and part.strip()
+    ]
+    if request.manufacturer or request.model:
+        # Bias results toward manufacturer support material without restricting
+        # the search to a guessed domain (many brands use regional domains).
+        parts.append("official support troubleshooting")
     return " ".join(parts)[:400]
 
 

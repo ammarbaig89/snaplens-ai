@@ -45,6 +45,19 @@ class VisionAnalysisResponse(ContractModel):
     )
 
 
+class DiagnosisOverview(ContractModel):
+    """Image observations kept separate from generated troubleshooting advice."""
+
+    result_status: Literal["identified", "ambiguous", "unrecognized"]
+    device: DeviceIdentification
+    observed_text: list[Annotated[str, Field(max_length=500)]] = Field(
+        default_factory=list, max_length=100
+    )
+    error_codes: list[Annotated[str, Field(max_length=100)]] = Field(
+        default_factory=list, max_length=30
+    )
+
+
 class RetrievalSearchRequest(ContractModel):
     request_id: UUID
     query: str = Field(min_length=1, max_length=1000)
@@ -78,6 +91,7 @@ class DiagnosisResult(ContractModel):
     request_id: UUID
     session_id: UUID
     status: Literal["completed", "needs_clarification"]
+    overview: DiagnosisOverview | None = None
     answer: str = Field(min_length=1, max_length=8000)
     citations: list[RetrievedSource] = Field(default_factory=list, max_length=10)
     warnings: list[Annotated[str, Field(max_length=500)]] = Field(

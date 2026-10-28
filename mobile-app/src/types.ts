@@ -8,10 +8,23 @@ export type DiagnosisCitation = {
   retrieved_at: string;
 };
 
+export type DiagnosisOverview = {
+  result_status: "identified" | "ambiguous" | "unrecognized";
+  device: {
+    category: string | null;
+    brand: string | null;
+    model: string | null;
+    confidence: number;
+  };
+  observed_text: string[];
+  error_codes: string[];
+};
+
 export type DiagnosisResult = {
   request_id: string;
   session_id: string;
   status: "completed" | "needs_clarification";
+  overview?: DiagnosisOverview | null;
   answer: string;
   citations: DiagnosisCitation[];
   warnings: string[];

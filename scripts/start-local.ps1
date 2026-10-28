@@ -38,7 +38,23 @@ if ($lanAddress) {
 }
 
 $services = @("vision", "retrieval", "orchestrator", "gateway")
+$servicePorts = @{
+  vision = 8002
+  retrieval = 8003
+  orchestrator = 8001
+  gateway = 8000
+}
 foreach ($service in $services) {
+  $port = $servicePorts[$service]
+  $listener = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($listener) {
+    $owner = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
+    $ownerName = if ($owner) { $owner.ProcessName } else { "unknown process" }
+    Write-Host "$service port $port is already in use by PID $($listener.OwningProcess) ($ownerName); leaving it running."
+    continue
+  }
+
   $quotedRunner = '"' + $runner + '"'
   Start-Process -FilePath $shell -ArgumentList @(
     "-NoExit",
@@ -49,6 +65,6 @@ foreach ($service in $services) {
   Start-Sleep -Milliseconds 500
 }
 
-Write-Host "Started the four SnapLens backend services in separate PowerShell windows."
+Write-Host "Started missing SnapLens services in separate PowerShell windows; any service already using its port was left running."
 Write-Host "Wait for startup, then check http://127.0.0.1:8000/health/ready on this PC."
 Write-Host "Keep these service windows open while testing the mobile app."

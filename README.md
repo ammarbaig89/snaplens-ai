@@ -152,134 +152,132 @@ The service folder name identifies each microservice; its `main.py` file is the 
 
 ## Local Development
 
-### Requirements
+### Prerequisites
 
-- Python 3.12 or newer.
-- Docker is not required for the local backend workflow below.
-- Provider credentials are not required when mock providers are selected.
+- Windows 10/11 with PowerShell.
+- Python 3.12 or newer and Node.js 22.13 or newer (`node --version`, `python --version`).
+- Expo Go on an Android/iPhone for physical-device testing. Android Studio is optional if using an emulator.
+- Docker is optional. Provider API keys are not needed for mock mode.
 
-### Create the Python environment
+### One-time install
 
-Run these commands from the repository root in PowerShell:
+Run from the repository root (`D:\snaplens\snaplens-ai` in this checkout):
 
 ```powershell
 python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+Set-Location mobile-app
+npm ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+Set-Location ..
 ```
 
-The default `VISION_PROVIDER=mock` needs no API key. To use Gemini later, add
-your private key to the ignored local `.env` file and set
-`VISION_PROVIDER=gemini`. The tracked `.env.example` contains only safe
-placeholders. See [Environment variables](docs/environment-variables.md) for
-which settings are active and which are reserved for later phases.
+The guarded copy commands preserve an existing local `.env` and its private
+keys. Fresh installs use mock Vision, Retrieval, and Answer providers, so they
+make no Gemini or Tavily requests. To use live providers, add credentials to
+the ignored **repository-root** `.env` and deliberately change the matching
+provider settings. Never put provider keys in `mobile-app/.env` or an
+`EXPO_PUBLIC_*` value. See [environment-variable details](docs/environment-variables.md).
 
-### Run the Expo mobile app
+### Start all backend services
 
-See [mobile-app setup](mobile-app/README.md) for Node.js requirements, Android
-emulator/phone Gateway addresses, camera permissions, and the client startup
-commands. Keep Gemini and Tavily keys in the backend root `.env`; the Expo app
-only receives the public Gateway URL.
-
-### Run the backend locally
-
-Run the backend launcher from the repository root. It opens the Vision,
-Retrieval, Orchestrator, and Gateway services in separate PowerShell windows,
-sets the required local service URLs, and updates the mobile app's public
-Gateway URL to the PC's current LAN address when Windows can detect one:
+From the repository root, run:
 
 ```powershell
 .\scripts\start-local.ps1
 ```
 
-Keep the four service windows open while using the app. Check that the Gateway
-is ready on the PC at `http://127.0.0.1:8000/health/ready`. If the phone still
-cannot connect, confirm the phone and PC are on the same Wi-Fi and allow
-inbound TCP port `8000` through Windows Firewall for the active network.
+This opens a PowerShell window for each service that is not already using its
+port, detects the PC's LAN address, and writes that address into
+`mobile-app/.env` for a phone to reach the Gateway. Keep the service windows
+open while testing. You can rerun the launcher; it skips occupied ports to
+avoid duplicate-server “address already in use” errors. Confirm all four
+health checks below return `status: ok`.
 
-To start services manually, open four PowerShell terminals at the repository
-root. In each terminal, set the shared contracts path:
+The services and local-only URLs are:
+
+| Service | Port | Health check |
+|---|---:|---|
+| API Gateway | 8000 | `http://127.0.0.1:8000/health/ready` |
+| Diagnostic Orchestrator | 8001 | `http://127.0.0.1:8001/health/ready` |
+| Vision | 8002 | `http://127.0.0.1:8002/health/ready` |
+| Retrieval | 8003 | `http://127.0.0.1:8003/health/ready` |
+
+The Gateway's readiness check depends on the Orchestrator; the Orchestrator's
+readiness check depends on Vision and Retrieval. If starting manually, start
+Vision and Retrieval first, then Orchestrator, then Gateway. From separate
+PowerShell windows at the repository root, use:
 
 ```powershell
-$repo = (Resolve-Path .).Path
-$env:PYTHONPATH = $repo
+.\scripts\run-local-service.ps1 -Service vision
+.\scripts\run-local-service.ps1 -Service retrieval
+.\scripts\run-local-service.ps1 -Service orchestrator
+.\scripts\run-local-service.ps1 -Service gateway
 ```
 
-In the first terminal, start the Diagnostic Orchestrator:
+Run one command per window. The launcher configures `PYTHONPATH` and internal
+service addresses for you. Check readiness after startup:
 
 ```powershell
-$env:VISION_SERVICE_URL = 'http://127.0.0.1:8002'
-$env:RETRIEVAL_SERVICE_URL = 'http://127.0.0.1:8003'
-Set-Location (Join-Path $repo 'services\diagnostic-orchestrator')
-& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8001
+foreach ($port in 8002, 8003, 8001, 8000) {
+  Invoke-RestMethod "http://127.0.0.1:$port/health/ready"
+}
 ```
 
-In the second terminal, start the Vision Service:
+Stop a manually started service with **Ctrl+C** in its window. If a port is
+already occupied, inspect its owner before stopping anything:
 
 ```powershell
-Set-Location (Join-Path $repo 'services\vision-service')
-& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8002
+Get-NetTCPConnection -State Listen -LocalPort 8000,8001,8002,8003 |
+  Select-Object LocalAddress,LocalPort,OwningProcess
+$ownerPid = (Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction Stop |
+  Select-Object -First 1 -ExpandProperty OwningProcess)
+Get-Process -Id $ownerPid
 ```
 
-In the third terminal, start the Retrieval Service:
+### Start the mobile app
+
+Start the backend first, then use a new PowerShell window:
 
 ```powershell
-Set-Location (Join-Path $repo 'services\retrieval-service')
-& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 127.0.0.1 --port 8003
+Set-Location mobile-app
+npm start -- --lan
 ```
 
-The Retrieval Service uses the offline mock provider by default and returns no
-sources. To intentionally run a live search, set `RETRIEVAL_PROVIDER=tavily` in
-the ignored root `.env` file. A diagnosis with recognizable device details may
-make one Tavily search; unrecognized images skip retrieval to conserve credits.
+Scan the new QR code with Expo Go. If `mobile-app/.env` was changed while Expo
+was already running, stop Expo with **Ctrl+C** and restart it to load the new
+URL. Use the address for the device type:
 
-In the fourth terminal, start the API Gateway:
+| Client | `EXPO_PUBLIC_API_BASE_URL` |
+|---|---|
+| Physical phone | `http://<PC-Wi-Fi-IPv4>:8000` |
+| Android emulator | `http://10.0.2.2:8000` |
+| iOS simulator | `http://127.0.0.1:8000` |
+
+For a physical phone, the phone and PC must be on the same Wi-Fi. Windows
+Firewall must allow inbound TCP port `8000` on the active network. The Gateway
+listens on all interfaces; internal services stay on the PC. Do not use
+`localhost` or the Metro port `8081` as the phone's Gateway address.
+
+### Try a diagnosis
+
+The mobile flow accepts JPEG, PNG, or WebP images up to 10 MiB. With default
+mock providers, the API deliberately returns a clarification response instead
+of claiming it analyzed the photo. For a real diagnosis, configure the server-
+side Gemini key and providers; enable Tavily only when you want to spend search
+credits. The sample JPEG for direct API checks is `scripts/sample.jpg`:
 
 ```powershell
-$env:ORCHESTRATOR_URL = 'http://127.0.0.1:8001'
-Set-Location (Join-Path $repo 'services\api-gateway')
-& (Join-Path $repo '.venv\Scripts\python.exe') -m uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-Check Gateway readiness and send a sample request from another PowerShell terminal:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/health/ready
 curl.exe -X POST http://127.0.0.1:8000/v1/diagnoses `
   -F "question=What does this error code mean?" `
-  -F "image=@sample.png"
+  -F "image=@scripts/sample.jpg"
 ```
 
-With mock Vision, Retrieval, and Answer providers, the public diagnosis flow
-returns a safe clarification request without external calls. You can call
-Vision directly to try its mock result:
-
-```powershell
-curl.exe -X POST http://127.0.0.1:8002/internal/v1/vision/analyses `
-  -F "request_id=550e8400-e29b-41d4-a716-446655440000" `
-  -F "question=Read the visible error code" `
-  -F "image=@sample.png"
-```
-
-Call Retrieval directly to check its mock response:
-
-```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:8003/internal/v1/retrieval/searches `
-  -ContentType 'application/json' `
-  -Body '{"request_id":"550e8400-e29b-41d4-a716-446655440000","query":"How to resolve error E21?","manufacturer":"Acme","model":"WM-100","limit":5}'
-```
-
-The mock response says no real analysis was performed. Use a local JPEG, PNG,
-or WebP image no larger than 10 MiB. Press **Ctrl+C** in each service terminal
-to stop it.
-
-### Run tests
-
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
-
-The remaining services can be started the same way from their `services/<service-name>/` folders to check `/health/live` and `/health/ready`. Dockerfiles and `docker-compose.yml` remain available for later; the Compose stack has not been validated as part of this local workflow.
+Dockerfiles and `docker-compose.yml` are optional configuration for later
+container-based development; the commands above run services directly on
+Windows without Docker.
 
 > [!IMPORTANT]
 > **Environment & Secrets:** Never commit actual `.env` files, private credentials, uploaded user images, or sensitive logs. Each application will provide a sanitized `.env.example` listing required variables without values.

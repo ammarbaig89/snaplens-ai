@@ -9,6 +9,7 @@ import httpx
 from langgraph.graph import END, START, StateGraph
 
 from shared.contracts import (
+    DiagnosisOverview,
     DiagnosisResult,
     ErrorEnvelope,
     RetrievalSearchRequest,
@@ -310,6 +311,7 @@ def build_workflow(
                 request_id=state["request_id"],
                 session_id=state["session_id"],
                 status="needs_clarification",
+                overview=_overview(vision),
                 answer=answer,
                 citations=[],
                 warnings=_unique_warnings(
@@ -332,6 +334,7 @@ def build_workflow(
                 request_id=state["request_id"],
                 session_id=state["session_id"],
                 status="needs_clarification",
+                overview=_overview(vision),
                 answer=(
                     "I found support references, but couldn't prepare a verified "
                     "step-by-step answer right now. Review the sources and confirm "
@@ -371,6 +374,7 @@ def build_workflow(
             request_id=state["request_id"],
             session_id=state["session_id"],
             status=status,
+            overview=_overview(vision),
             answer=answer,
             citations=citations,
             warnings=_unique_warnings(
@@ -395,6 +399,15 @@ def build_workflow(
     graph.add_edge("retrieve_support", "synthesize_answer")
     graph.add_edge("synthesize_answer", END)
     return graph.compile()
+
+
+def _overview(vision: VisionAnalysisResponse) -> DiagnosisOverview:
+    return DiagnosisOverview(
+        result_status=vision.result_status,
+        device=vision.device,
+        observed_text=vision.observed_text,
+        error_codes=vision.error_codes,
+    )
 
 
 def _unique_warnings(warnings: list[str]) -> list[str]:

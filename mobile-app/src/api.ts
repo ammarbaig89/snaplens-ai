@@ -1,6 +1,6 @@
 import { Blob as ExpoBlob } from "expo-blob";
 import { API_BASE_URL, MAX_IMAGE_BYTES, MAX_QUESTION_CHARS, SUPPORTED_IMAGE_TYPES } from "./config";
-import type { ApiError, DiagnosisResult, ImageSelection } from "./types";
+import type { ApiError, DiagnosisOverview, DiagnosisResult, ImageSelection } from "./types";
 
 export class DiagnosisApiError extends Error {
   readonly requestId?: string;
@@ -33,6 +33,22 @@ export function validateDiagnosisInput(
   return null;
 }
 
+function isDiagnosisOverview(value: unknown): value is DiagnosisOverview {
+  if (!value || typeof value !== "object") return false;
+  const overview = value as Partial<DiagnosisOverview>;
+  const device = overview.device;
+  return (
+    (overview.result_status === "identified" || overview.result_status === "ambiguous" || overview.result_status === "unrecognized") &&
+    Boolean(device && typeof device === "object") &&
+    (typeof device?.category === "string" || device?.category === null) &&
+    (typeof device?.brand === "string" || device?.brand === null) &&
+    (typeof device?.model === "string" || device?.model === null) &&
+    typeof device?.confidence === "number" &&
+    Array.isArray(overview.observed_text) && overview.observed_text.every((item) => typeof item === "string") &&
+    Array.isArray(overview.error_codes) && overview.error_codes.every((item) => typeof item === "string")
+  );
+}
+
 function isDiagnosisResult(value: unknown): value is DiagnosisResult {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<DiagnosisResult>;
@@ -40,6 +56,7 @@ function isDiagnosisResult(value: unknown): value is DiagnosisResult {
     typeof item.request_id === "string" &&
     typeof item.session_id === "string" &&
     (item.status === "completed" || item.status === "needs_clarification") &&
+    (item.overview === undefined || item.overview === null || isDiagnosisOverview(item.overview)) &&
     typeof item.answer === "string" &&
     Array.isArray(item.citations) &&
     item.citations.every((citation) => {

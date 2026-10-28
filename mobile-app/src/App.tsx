@@ -88,7 +88,14 @@ const themeOptions: ThemeOption[] = [
   },
 ];
 
-const logoSource = require("../assets/snaplens-eye.png") as number;
+const logoSources: Record<ThemeId, number> = {
+  light: require("../assets/snaplens-eye-light.png") as number,
+  ocean: require("../assets/snaplens-eye-ocean.png") as number,
+  graphite: require("../assets/snaplens-eye-graphite.png") as number,
+  signal: require("../assets/snaplens-eye-signal.png") as number,
+  violet: require("../assets/snaplens-eye-violet.png") as number,
+  arctic: require("../assets/snaplens-eye-arctic.png") as number,
+};
 
 const themePreferenceFileName = "snaplens-theme.txt";
 
@@ -262,7 +269,7 @@ function parseGuidanceContent(rawText: string, citations: DiagnosisResult["citat
   // If no numbered steps were detected, treat the entire text as intro
   if (steps.length === 0) {
     return {
-      intro: cleaned,
+      intro: null,
       steps: [],
       conclusion: null,
     };
@@ -352,9 +359,11 @@ export default function App() {
   const [image, setImage] = useState<ImageSelection | null>(null);
   const [question, setQuestion] = useState("");
   const [result, setResult] = useState<DiagnosisResult | null>(null);
+  const [resultTab, setResultTab] = useState<"overview" | "guidance">("overview");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isPickingPhoto, setIsPickingPhoto] = useState(false);
+  const [photoPickerAction, setPhotoPickerAction] = useState<"camera" | "library" | null>(null);
+  const isPickingPhoto = photoPickerAction !== null;
   const [isQuestionFocused, setIsQuestionFocused] = useState(false);
   const questionInputRef = useRef<TextInput>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -365,15 +374,11 @@ export default function App() {
   const blurTargetRef = useRef<View>(null);
   const startupOpacity = useRef(new Animated.Value(1)).current;
   const startupLogoOpacity = useRef(new Animated.Value(0)).current;
-  const startupLogoScale = useRef(new Animated.Value(0.72)).current;
-  const startupLogoRotation = useRef(new Animated.Value(0)).current;
+  const startupLogoScale = useRef(new Animated.Value(0.88)).current;
   const startupTextOpacity = useRef(new Animated.Value(0)).current;
   const startupTextOffset = useRef(new Animated.Value(12)).current;
-  const startupRingProgress = useRef(new Animated.Value(0)).current;
-  const startupOrbitRotation = useRef(new Animated.Value(0)).current;
-  const startupHaloOpacity = useRef(new Animated.Value(0)).current;
-  const startupHaloScale = useRef(new Animated.Value(0.82)).current;
   const startupProgress = useRef(new Animated.Value(0)).current;
+  const photoPickerLockRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -403,16 +408,11 @@ export default function App() {
     if (!themePreferenceLoaded) return;
 
     const entrance = Animated.parallel([
-      Animated.timing(startupLogoOpacity, { toValue: 1, duration: 360, useNativeDriver: true }),
-      Animated.spring(startupLogoScale, { toValue: 1, friction: 6, tension: 58, useNativeDriver: true }),
-      Animated.timing(startupLogoRotation, { toValue: 1, duration: 560, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(startupHaloOpacity, { toValue: 1, duration: 420, useNativeDriver: true }),
-      Animated.spring(startupHaloScale, { toValue: 1, friction: 8, tension: 48, useNativeDriver: true }),
+      Animated.timing(startupLogoOpacity, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.spring(startupLogoScale, { toValue: 1, friction: 8, tension: 52, useNativeDriver: true }),
       Animated.timing(startupTextOpacity, { toValue: 1, duration: 420, delay: 300, useNativeDriver: true }),
       Animated.timing(startupTextOffset, { toValue: 0, duration: 420, delay: 300, useNativeDriver: true }),
-      Animated.timing(startupRingProgress, { toValue: 1, duration: 1050, useNativeDriver: true }),
-      Animated.timing(startupOrbitRotation, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(startupProgress, { toValue: 1, duration: 1350, useNativeDriver: false }),
+      Animated.timing(startupProgress, { toValue: 1, duration: 2850, useNativeDriver: false }),
     ]);
     entrance.start();
 
@@ -423,13 +423,13 @@ export default function App() {
       ]).start(({ finished }) => {
         if (finished) setShowStartup(false);
       });
-    }, 1450);
+    }, 3300);
 
     return () => {
       clearTimeout(dismissTimer);
       entrance.stop();
     };
-  }, [themePreferenceLoaded, startupLogoOpacity, startupLogoScale, startupLogoRotation, startupTextOpacity, startupTextOffset, startupRingProgress, startupOrbitRotation, startupHaloOpacity, startupHaloScale, startupProgress, startupOpacity]);
+  }, [themePreferenceLoaded, startupLogoOpacity, startupLogoScale, startupTextOpacity, startupTextOffset, startupProgress, startupOpacity]);
 
   useEffect(() => {
     Animated.timing(drawerProgress, {
@@ -492,6 +492,7 @@ export default function App() {
     setImage(null);
     setQuestion("");
     setResult(null);
+    setResultTab("overview");
     setError(null);
     setCompletedStepIds({});
     setDiagnosisStep("photo");
@@ -508,7 +509,7 @@ export default function App() {
       const guidance = parseGuidanceContent(result.answer, result.citations);
       const textToShare = [
         "SnapLens AI Troubleshooting Guidance",
-        guidance.intro ? `\nOverview:\n${guidance.intro}` : "",
+        guidance.intro ? `\nGuidance summary:\n${guidance.intro}` : "",
         guidance.steps.length > 0 ? `\nSteps:\n${guidance.steps.map((s) => `${s.stepNumber}. ${s.text}`).join("\n")}` : `\n${result.answer}`,
         guidance.conclusion ? `\n\nNotes: ${guidance.conclusion}` : "",
         result.citations.length > 0 ? `\n\nSources:\n${result.citations.map((c, i) => `[${i + 1}] ${c.title} (${c.url})`).join("\n")}` : "",
@@ -523,9 +524,10 @@ export default function App() {
   };
 
   const chooseFromLibrary = async (): Promise<boolean> => {
-    if (isPickingPhoto || isLoading) return false;
+    if (photoPickerLockRef.current || isLoading) return false;
+    photoPickerLockRef.current = true;
     setError(null);
-    setIsPickingPhoto(true);
+    setPhotoPickerAction("library");
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -553,14 +555,16 @@ export default function App() {
       Alert.alert("Could not open your photos", "Please try again or use the camera instead.");
       return false;
     } finally {
-      setIsPickingPhoto(false);
+      photoPickerLockRef.current = false;
+      setPhotoPickerAction(null);
     }
   };
 
   const takePhoto = async (): Promise<boolean> => {
-    if (isPickingPhoto || isLoading) return false;
+    if (photoPickerLockRef.current || isLoading) return false;
+    photoPickerLockRef.current = true;
     setError(null);
-    setIsPickingPhoto(true);
+    setPhotoPickerAction("camera");
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
@@ -588,7 +592,8 @@ export default function App() {
       Alert.alert("Could not open your camera", "Please check camera access and try again.");
       return false;
     } finally {
-      setIsPickingPhoto(false);
+      photoPickerLockRef.current = false;
+      setPhotoPickerAction(null);
     }
   };
 
@@ -606,6 +611,7 @@ export default function App() {
     try {
       const diagnosis = await createDiagnosis(question, image);
       setResult(diagnosis);
+      setResultTab("overview");
       setDiagnosisStep("result");
     } catch (caught) {
       console.error("[SnapLens Submit Caught]:", caught);
@@ -645,6 +651,7 @@ export default function App() {
     try {
       const diagnosis = await createDiagnosis(voiceQuestion, image);
       setResult(diagnosis);
+      setResultTab("overview");
       setDiagnosisStep("result");
       return `${diagnosis.answer}${diagnosis.citations.length ? ` The result includes ${diagnosis.citations.length} cited sources on screen.` : ""}`;
     } catch (caught) {
@@ -695,7 +702,7 @@ export default function App() {
             
             <View style={styles.menuLine} /><View style={styles.menuLine} /><View style={[styles.menuLine, styles.menuLineShort]} />
           </Pressable>
-          <Image accessibilityLabel="SnapLens eye logo" source={logoSource} style={[styles.brandIcon, { tintColor: colors.blue }]} />
+          <Image accessibilityLabel="SnapLens eye logo" source={logoSources[themeId]} style={styles.brandIcon} />
           <View style={styles.brandCopy}>
             <Text style={styles.brandName}>SnapLens <Text style={styles.brandAI}>AI</Text></Text>
             <Text style={styles.brandCaption}>SEE IT. SOLVE IT.</Text>
@@ -885,7 +892,7 @@ export default function App() {
               <Text style={styles.pageIntro}>See it. Solve it. Understand what your device is trying to tell you.</Text>
 
               <GlassSurface style={styles.aboutHero}>
-                <Image accessibilityLabel="SnapLens eye logo" source={logoSource} style={[styles.aboutMark, { tintColor: colors.blue }]} />
+                <Image accessibilityLabel="SnapLens eye logo" source={logoSources[themeId]} style={styles.aboutMark} />
                 <Text style={styles.aboutHeroTitle}>Clear help starts with what you can see.</Text>
                 <Text style={styles.aboutHeroBody}>SnapLens combines a photo, your question, and supporting sources to make everyday troubleshooting easier to follow.</Text>
               </GlassSurface>
@@ -938,8 +945,8 @@ export default function App() {
                     </GlassSurface>
                   )}
                   <View style={styles.photoActions}>
-                    <View style={styles.photoActionColumn}><PrimaryButton label="Take a photo" icon="◉" onPress={takePhoto} busy={isPickingPhoto} disabled={isLoading} /></View>
-                    <View style={styles.photoActionColumn}><PrimaryButton label="Choose photo" icon="▧" onPress={chooseFromLibrary} secondary busy={isPickingPhoto} disabled={isLoading} /></View>
+                    <View style={styles.photoActionColumn}><PrimaryButton label="Take a photo" icon="◉" onPress={takePhoto} busy={photoPickerAction === "camera"} disabled={isLoading} /></View>
+                    <View style={styles.photoActionColumn}><PrimaryButton label="Choose photo" icon="▧" onPress={chooseFromLibrary} secondary busy={photoPickerAction === "library"} disabled={isLoading} /></View>
                   </View>
                   <GlassSurface style={styles.helperCard}><Text style={styles.helperIcon}>✦</Text><Text style={styles.helperText}>Tip: move closer if the error code is small.</Text><Pressable accessibilityRole="button" onPress={() => setActiveTab("guide")}><Text style={styles.helperLink}>Photo tips</Text></Pressable></GlassSurface>
                   <View style={styles.bottomAction}><PrimaryButton label="Continue to your question" onPress={() => { setError(null); setDiagnosisStep("question"); }} disabled={!image} /></View>
@@ -995,11 +1002,26 @@ export default function App() {
                 const guidance = parseGuidanceContent(result.answer, result.citations);
                 const hasSteps = guidance.steps.length > 0;
                 const completedCount = guidance.steps.filter((s) => completedStepIds[s.id]).length;
+                const overview = result.overview;
+                const device = overview?.device;
+                const deviceTitle = [device?.brand, device?.model].filter(Boolean).join(" ") || device?.category || "Device not identified yet";
+                const hasDeviceEvidence = Boolean(device?.brand || device?.model || device?.category);
+                const overviewStatus = overview?.result_status === "identified"
+                  ? "Device details detected"
+                  : overview?.result_status === "ambiguous"
+                    ? "Possible device match"
+                    : "Device not confidently identified";
+                const confidence = device?.confidence ?? 0;
+                const confidenceLabel = confidence >= 0.8
+                  ? "Strong visual match"
+                  : confidence >= 0.5
+                    ? "Possible visual match"
+                    : "Low-confidence visual match";
 
                 return (
                   <View>
                     <View style={styles.resultIntro}>
-                      <View style={styles.resultIcon}><Text style={styles.resultIconText}>✓</Text></View>
+                      <View style={styles.resultIcon}><Text style={styles.resultIconText}>{result.status === "completed" ? "✓" : "?"}</Text></View>
                       <View style={styles.resultIntroCopy}>
                         <Text style={styles.resultEyebrow}>{result.status === "completed" ? "ANALYSIS COMPLETE" : "ONE MORE DETAIL"}</Text>
                         <Text style={styles.resultTitle}>{result.status === "completed" ? "Here’s what we found" : "Let’s narrow it down"}</Text>
@@ -1010,117 +1032,117 @@ export default function App() {
                       </Pressable>
                     </View>
 
-                    {image ? (
-                      <GlassSurface style={styles.resultContextCard}>
-                        <Image source={{ uri: image.uri }} style={styles.resultThumbnail} resizeMode="cover" accessibilityLabel="Photo used for this diagnosis" />
-                        <View style={styles.resultContextCopy}>
-                          <Text style={styles.resultContextLabel}>YOUR QUESTION</Text>
-                          <Text style={styles.resultQuestion} numberOfLines={2}>{question}</Text>
+                    <View style={styles.resultTabBar} accessibilityRole="tablist">
+                      <Pressable accessibilityRole="tab" accessibilityState={{ selected: resultTab === "overview" }} onPress={() => setResultTab("overview")} style={[styles.resultTab, resultTab === "overview" && styles.resultTabSelected]}>
+                        <Text style={[styles.resultTabText, resultTab === "overview" && styles.resultTabTextSelected]}>Overview</Text>
+                      </Pressable>
+                      <Pressable accessibilityRole="tab" accessibilityState={{ selected: resultTab === "guidance" }} onPress={() => setResultTab("guidance")} style={[styles.resultTab, resultTab === "guidance" && styles.resultTabSelected]}>
+                        <Text style={[styles.resultTabText, resultTab === "guidance" && styles.resultTabTextSelected]}>SnapLens guidance</Text>
+                      </Pressable>
+                    </View>
+
+                    {resultTab === "overview" ? (
+                      <View>
+                        {image ? (
+                          <GlassSurface style={styles.resultContextCard}>
+                            <Image source={{ uri: image.uri }} style={styles.resultThumbnail} resizeMode="cover" accessibilityLabel="Photo used for this diagnosis" />
+                            <View style={styles.resultContextCopy}>
+                              <Text style={styles.resultContextLabel}>YOUR QUESTION</Text>
+                              <Text style={styles.resultQuestion} numberOfLines={2}>{question}</Text>
+                            </View>
+                          </GlassSurface>
+                        ) : null}
+
+                        <GlassSurface style={styles.overviewCard}>
+                          <Text style={styles.overviewEyebrow}>WHAT SNAP LENS SAW</Text>
+                          <Text style={styles.overviewStatus}>{overviewStatus}</Text>
+                          <Text style={styles.overviewDevice}>{deviceTitle}</Text>
+                          {overview && hasDeviceEvidence ? <Text style={styles.overviewConfidence}>{confidenceLabel} · {Math.round(confidence * 100)}% visual match estimate</Text> : null}
+                          {device?.category && deviceTitle !== device.category ? <Text style={styles.overviewCategory}>{device.category}</Text> : null}
+                          {overview?.error_codes.length ? (
+                            <View style={styles.overviewGroup}>
+                              <Text style={styles.overviewGroupLabel}>ERROR CODES</Text>
+                              <View style={styles.overviewChipRow}>{overview.error_codes.map((code) => <View key={code} style={styles.overviewChip}><Text style={styles.overviewChipText}>{code}</Text></View>)}</View>
+                            </View>
+                          ) : null}
+                          {overview?.observed_text.length ? (
+                            <View style={styles.overviewGroup}>
+                              <Text style={styles.overviewGroupLabel}>TEXT VISIBLE IN PHOTO</Text>
+                              {overview.observed_text.slice(0, 4).map((line, index) => <Text key={`${index}-${line}`} style={styles.overviewObservedText}>“{line}”</Text>)}
+                            </View>
+                          ) : null}
+                          {!overview ? <Text style={styles.overviewFallback}>Image details are unavailable in this response. You can still review the guidance and its sources.</Text> : null}
+                        </GlassSurface>
+
+                        {result.warnings.length > 0 ? (
+                          <View style={styles.warningCard}>
+                            <View style={styles.warningHeaderRow}><Text style={styles.warningAlertIcon}>⚠</Text><Text style={styles.warningHeading}>Safety & pre-checks</Text></View>
+                            {result.warnings.map((warning, index) => <Text key={`${index}-${warning}`} style={styles.warningText}>•  {warning}</Text>)}
+                          </View>
+                        ) : null}
+
+                        <View style={styles.overviewNextStep}>
+                          <View style={styles.overviewNextCopy}><Text style={styles.overviewNextTitle}>{result.citations.length ? `${result.citations.length} support source${result.citations.length === 1 ? "" : "s"} found` : "No support sources found"}</Text><Text style={styles.overviewNextHint}>Review the evidence-backed steps and source links.</Text></View>
+                          <Pressable accessibilityRole="button" onPress={() => setResultTab("guidance")} style={styles.overviewNextButton}><Text style={styles.overviewNextButtonText}>View guidance ›</Text></Pressable>
                         </View>
-                      </GlassSurface>
-                    ) : null}
-
-                    {result.warnings.length > 0 ? (
-                      <View style={styles.warningCard}>
-                        <View style={styles.warningHeaderRow}>
-                          <Text style={styles.warningAlertIcon}>⚠</Text>
-                          <Text style={styles.warningHeading}>Safety & Pre-Checks</Text>
-                        </View>
-                        {result.warnings.map((warning, index) => (
-                          <Text key={`${index}-${warning}`} style={styles.warningText}>•  {warning}</Text>
-                        ))}
-                      </View>
-                    ) : null}
-
-                    {guidance.intro ? (
-                      <GlassSurface style={styles.introSummaryCard}>
-                        <Text style={styles.introSummaryLabel}>OVERVIEW</Text>
-                        <Text style={styles.introSummaryText}>{guidance.intro}</Text>
-                      </GlassSurface>
-                    ) : null}
-
-                    {hasSteps ? (
-                      <View style={styles.stepsSection}>
-                        <View style={styles.stepsHeaderRow}>
-                          <Text style={styles.stepsSectionTitle}>Troubleshooting Steps</Text>
-                          <Text style={styles.stepsProgressLabel}>{completedCount}/{guidance.steps.length} done</Text>
-                        </View>
-
-                        {guidance.steps.map((step) => {
-                          const isDone = Boolean(completedStepIds[step.id]);
-                          return (
-                            <Pressable
-                              key={step.id}
-                              accessibilityRole="checkbox"
-                              accessibilityState={{ checked: isDone }}
-                              onPress={() => toggleStep(step.id)}
-                              style={({ pressed }) => [
-                                styles.stepCard,
-                                isDone && styles.stepCardDone,
-                                pressed && styles.stepCardPressed,
-                              ]}
-                            >
-                              <GlassBlur style={StyleSheet.absoluteFill} intensity={32} />
-                              <View style={[styles.stepCheckbox, isDone && styles.stepCheckboxDone]}>
-                                <Text style={[styles.stepCheckboxText, isDone && styles.stepCheckboxTextDone]}>
-                                  {isDone ? "✓" : String(step.stepNumber)}
-                                </Text>
-                              </View>
-                              <View style={styles.stepContent}>
-                                <Text style={[styles.stepInstructionText, isDone && styles.stepInstructionDone]}>
-                                  {step.text}
-                                </Text>
-                              </View>
-                            </Pressable>
-                          );
-                        })}
                       </View>
                     ) : (
-                      <GlassSurface style={styles.answerCard}>
-                        <Text style={styles.answerLabel}>SNAPLENS GUIDANCE</Text>
-                        <Text style={styles.answerText}>{formatAnswerText(result.answer, result.citations)}</Text>
-                      </GlassSurface>
-                    )}
-
-                    {guidance.conclusion ? (
-                      <GlassSurface style={styles.conclusionCard}>
-                        <Text style={styles.conclusionText}>{guidance.conclusion}</Text>
-                      </GlassSurface>
-                    ) : null}
-
-                    <View style={styles.sourcesHeader}>
-                      <Text style={styles.sectionTitle}>Sources</Text>
-                      <Text style={styles.sectionMeta}>{result.citations.length} references</Text>
-                    </View>
-
-                    {result.citations.length > 0 ? result.citations.map((citation, index) => (
-                      <Pressable accessibilityRole="link" key={citation.source_id} onPress={() => void openSource(citation.url)} style={({ pressed }) => [styles.sourceCard, pressed && styles.sourcePressed]}>
-                        <GlassBlur style={StyleSheet.absoluteFill} intensity={38} />
-                        <View style={styles.sourceIndexBadge}><Text style={styles.sourceIndexBadgeText}>[{index + 1}]</Text></View>
-                        <View style={styles.sourceCopy}>
-                          <Text style={styles.sourceTitle} numberOfLines={2}>{citation.title}</Text>
-                          <Text style={styles.sourcePublisher} numberOfLines={1}>{citation.publisher || sourceHost(citation.url)}</Text>
-                          {citation.snippet ? <Text style={styles.sourceSnippet} numberOfLines={2}>{citation.snippet}</Text> : null}
+                      <View>
+                        <View style={styles.guidanceEvidenceNote}>
+                          <Text style={styles.guidanceEvidenceTitle}>{result.citations.length ? `Guidance based on ${result.citations.length} support source${result.citations.length === 1 ? "" : "s"}` : "No verified support sources found"}</Text>
+                          <Text style={styles.guidanceEvidenceBody}>Check that each suggestion matches your exact device model. Sources are listed below.</Text>
                         </View>
-                        <Text style={styles.sourceChevron}>›</Text>
-                      </Pressable>
-                    )) : (
-                      <View style={styles.noSources}>
-                        <Text style={styles.noSourcesTitle}>No verified sources found</Text>
-                        <Text style={styles.noSourcesText}>Treat this guidance as a starting point and check your device manual before repairs.</Text>
+                        {guidance.intro ? (
+                          <GlassSurface style={styles.introSummaryCard}>
+                            <Text style={styles.introSummaryLabel}>SNAPLENS GUIDANCE</Text>
+                            <Text style={styles.introSummaryText}>{guidance.intro}</Text>
+                          </GlassSurface>
+                        ) : null}
+
+                        {hasSteps ? (
+                          <View style={styles.stepsSection}>
+                            <View style={styles.stepsHeaderRow}>
+                              <Text style={styles.stepsSectionTitle}>Recommended steps</Text>
+                              <Text style={styles.stepsProgressLabel}>{completedCount}/{guidance.steps.length} done</Text>
+                            </View>
+                            {guidance.steps.map((step) => {
+                              const isDone = Boolean(completedStepIds[step.id]);
+                              return (
+                                <Pressable key={step.id} accessibilityRole="checkbox" accessibilityState={{ checked: isDone }} onPress={() => toggleStep(step.id)} style={({ pressed }) => [styles.stepCard, isDone && styles.stepCardDone, pressed && styles.stepCardPressed]}>
+                                  <GlassBlur style={StyleSheet.absoluteFill} intensity={32} />
+                                  <View style={[styles.stepCheckbox, isDone && styles.stepCheckboxDone]}><Text style={[styles.stepCheckboxText, isDone && styles.stepCheckboxTextDone]}>{isDone ? "✓" : String(step.stepNumber)}</Text></View>
+                                  <View style={styles.stepContent}><Text style={[styles.stepInstructionText, isDone && styles.stepInstructionDone]}>{step.text}</Text></View>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : (
+                          <GlassSurface style={styles.answerCard}>
+                            <Text style={styles.answerLabel}>GUIDANCE</Text>
+                            <Text style={styles.answerText}>{formatAnswerText(result.answer, result.citations)}</Text>
+                          </GlassSurface>
+                        )}
+
+                        {guidance.conclusion ? <GlassSurface style={styles.conclusionCard}><Text style={styles.conclusionText}>{guidance.conclusion}</Text></GlassSurface> : null}
+
+                        <View style={styles.sourcesHeader}><Text style={styles.sectionTitle}>Sources</Text><Text style={styles.sectionMeta}>{result.citations.length} references</Text></View>
+                        {result.citations.length > 0 ? result.citations.map((citation, index) => (
+                          <Pressable accessibilityRole="link" key={citation.source_id} onPress={() => void openSource(citation.url)} style={({ pressed }) => [styles.sourceCard, pressed && styles.sourcePressed]}>
+                            <GlassBlur style={StyleSheet.absoluteFill} intensity={38} />
+                            <View style={styles.sourceIndexBadge}><Text style={styles.sourceIndexBadgeText}>{String(index + 1).padStart(2, "0")}</Text></View>
+                            <View style={styles.sourceCopy}><Text style={styles.sourceTitle} numberOfLines={2}>{citation.title}</Text><Text style={styles.sourcePublisher} numberOfLines={1}>{citation.publisher || sourceHost(citation.url)}</Text>{citation.snippet ? <Text style={styles.sourceSnippet} numberOfLines={3}>{citation.snippet}</Text> : null}</View>
+                            <Text style={styles.sourceChevron}>›</Text>
+                          </Pressable>
+                        )) : (
+                          <View style={styles.noSources}><Text style={styles.noSourcesTitle}>No verified support found</Text><Text style={styles.noSourcesText}>No repair steps were generated. Check the device manual or add its make and model for a more precise search.</Text></View>
+                        )}
+
+                        <View style={styles.bottomActionRow}>
+                          <View style={styles.bottomActionFlex}><PrimaryButton label="Start new diagnosis" icon="＋" onPress={startNewDiagnosis} /></View>
+                          <Pressable accessibilityRole="button" accessibilityLabel="Share guidance" onPress={shareGuidance} style={styles.shareBottomButton}><GlassBlur style={StyleSheet.absoluteFill} intensity={38} /><Text style={styles.shareBottomIcon}>↗</Text><Text style={styles.shareBottomText}>Share</Text></Pressable>
+                        </View>
                       </View>
                     )}
-
-                    <View style={styles.bottomActionRow}>
-                      <View style={styles.bottomActionFlex}>
-                        <PrimaryButton label="Start new diagnosis" icon="＋" onPress={startNewDiagnosis} />
-                      </View>
-                      <Pressable accessibilityRole="button" accessibilityLabel="Share guidance" onPress={shareGuidance} style={styles.shareBottomButton}>
-                        <GlassBlur style={StyleSheet.absoluteFill} intensity={38} />
-                        <Text style={styles.shareBottomIcon}>↗</Text>
-                        <Text style={styles.shareBottomText}>Share</Text>
-                      </Pressable>
-                    </View>
                   </View>
                 );
               })() : null}
@@ -1144,7 +1166,7 @@ export default function App() {
             <View pointerEvents="none" style={styles.drawerTint} />
             
             <View style={styles.drawerHeader}>
-              <Image accessibilityLabel="SnapLens eye logo" source={logoSource} style={[styles.drawerBrandMark, { tintColor: colors.blue }]} />
+              <Image accessibilityLabel="SnapLens eye logo" source={logoSources[themeId]} style={styles.drawerBrandMark} />
               <View style={styles.drawerBrandCopy}><Text style={styles.drawerBrandName}>SnapLens <Text style={styles.brandAI}>AI</Text></Text><Text style={styles.drawerBrandCaption}>YOUR VISUAL ASSISTANT</Text></View>
               <Pressable accessibilityRole="button" accessibilityLabel="Close navigation menu" onPress={() => setDrawerOpen(false)} style={styles.drawerClose}><GlassBlur style={StyleSheet.absoluteFill} intensity={34} /><Text style={styles.drawerCloseText}>×</Text></Pressable>
             </View>
@@ -1224,38 +1246,14 @@ export default function App() {
           <Animated.View pointerEvents="auto" style={[styles.startupOverlay, { backgroundColor: colors.background, opacity: startupOpacity }]}>
             <View style={styles.startupBrand}>
               <View style={styles.startupMarkStage}>
-                <Animated.View style={[styles.startupHalo, { opacity: startupHaloOpacity, transform: [{ scale: startupHaloScale }] }]} />
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.startupRing,
-                    {
-                      opacity: startupRingProgress.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.38, 0] }),
-                      transform: [{ scale: startupRingProgress.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1.42] }) }],
-                    },
-                  ]}
-                />
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.startupOrbit,
-                    { transform: [{ rotate: startupOrbitRotation.interpolate({ inputRange: [0, 1], outputRange: ["-28deg", "332deg"] }) }] },
-                  ]}
-                >
-                  <View style={styles.startupOrbitDot} />
-                </Animated.View>
                 <Animated.Image
                   accessibilityLabel="SnapLens eye logo"
-                  source={logoSource}
+                  source={logoSources[themeId]}
                   style={[
                     styles.startupLogo,
                     {
                       opacity: startupLogoOpacity,
-                      tintColor: colors.blue,
-                      transform: [
-                        { scale: startupLogoScale },
-                        { rotate: startupLogoRotation.interpolate({ inputRange: [0, 1], outputRange: ["-7deg", "0deg"] }) },
-                      ],
+                      transform: [{ scale: startupLogoScale }],
                     },
                   ]}
                 />
@@ -1263,7 +1261,6 @@ export default function App() {
               <Animated.View style={{ opacity: startupTextOpacity, transform: [{ translateY: startupTextOffset }] }}>
                 <Text style={styles.startupWordmark}>SnapLens <Text style={styles.startupWordmarkAccent}>AI</Text></Text>
                 <Text style={styles.startupTagline}>SEE IT. SOLVE IT.</Text>
-                <Text style={styles.startupDescriptor}>YOUR VISUAL TROUBLESHOOTING ASSISTANT</Text>
               </Animated.View>
             </View>
             <View style={styles.startupLoadingTrack}>
@@ -1427,11 +1424,35 @@ return StyleSheet.create({
   resultTitle: { color: colors.ink, fontSize: 17, fontWeight: "900", marginTop: 3 },
   shareIconButton: { width: 38, height: 38, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.40)", borderWidth: 1, borderColor: "rgba(255,255,255,0.92)", alignItems: "center", justifyContent: "center", overflow: "hidden" },
   shareIconText: { color: colors.blueDark, fontSize: 17, fontWeight: "900" },
+  resultTabBar: { flexDirection: "row", padding: 4, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.42)", borderWidth: 1, borderColor: colors.glassBorder, marginBottom: 14 },
+  resultTab: { flex: 1, minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 11, paddingHorizontal: 8 },
+  resultTabSelected: { backgroundColor: colors.blueTint, borderWidth: 1, borderColor: colors.glassFeatureBorder },
+  resultTabText: { color: colors.muted, fontSize: 10, fontWeight: "800" },
+  resultTabTextSelected: { color: colors.blueDark },
   resultContextCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, borderRadius: 16, padding: 9, marginBottom: 13 },
   resultThumbnail: { width: 52, height: 52, borderRadius: 11, backgroundColor: colors.soft },
   resultContextCopy: { flex: 1, marginLeft: 11 },
   resultContextLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", letterSpacing: 0.9 },
   resultQuestion: { color: colors.ink, fontSize: 12, lineHeight: 17, fontWeight: "700", marginTop: 3 },
+  overviewCard: { backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, borderRadius: 18, padding: 16, marginBottom: 13 },
+  overviewEyebrow: { color: colors.blueDark, fontSize: 9, fontWeight: "900", letterSpacing: 1.15 },
+  overviewStatus: { color: colors.teal, fontSize: 10, fontWeight: "800", marginTop: 10 },
+  overviewDevice: { color: colors.ink, fontSize: 19, lineHeight: 25, fontWeight: "900", marginTop: 4 },
+  overviewConfidence: { color: colors.muted, fontSize: 9, lineHeight: 14, fontWeight: "700", marginTop: 5 },
+  overviewCategory: { color: colors.muted, fontSize: 11, marginTop: 4, textTransform: "capitalize" },
+  overviewGroup: { borderTopWidth: 1, borderTopColor: colors.line, marginTop: 13, paddingTop: 11 },
+  overviewGroupLabel: { color: colors.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1, marginBottom: 7 },
+  overviewChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  overviewChip: { minHeight: 28, justifyContent: "center", borderRadius: 9, paddingHorizontal: 10, backgroundColor: colors.blueTint, borderWidth: 1, borderColor: colors.glassFeatureBorder },
+  overviewChipText: { color: colors.blueDark, fontSize: 10, fontWeight: "900" },
+  overviewObservedText: { color: colors.ink, fontSize: 12, lineHeight: 18, marginTop: 2 },
+  overviewFallback: { color: colors.muted, fontSize: 11, lineHeight: 17, marginTop: 8 },
+  overviewNextStep: { flexDirection: "row", alignItems: "center", borderRadius: 16, padding: 13, marginBottom: 13, backgroundColor: colors.blueTint, borderWidth: 1, borderColor: colors.glassFeatureBorder },
+  overviewNextCopy: { flex: 1, paddingRight: 8 },
+  overviewNextTitle: { color: colors.ink, fontSize: 10, fontWeight: "900" },
+  overviewNextHint: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 },
+  overviewNextButton: { minHeight: 36, justifyContent: "center", borderRadius: 11, paddingHorizontal: 10, backgroundColor: "rgba(255,255,255,0.74)" },
+  overviewNextButtonText: { color: colors.blueDark, fontSize: 9, fontWeight: "900" },
   warningCard: { backgroundColor: "#FFF7E6", borderWidth: 1, borderColor: "#FFE0A3", borderRadius: 16, padding: 14, marginBottom: 14, shadowColor: "#D48B12", shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
   warningHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 7 },
   warningAlertIcon: { color: "#D48B12", fontSize: 15, marginRight: 6, fontWeight: "900" },
@@ -1440,6 +1461,9 @@ return StyleSheet.create({
   introSummaryCard: { backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, borderRadius: 16, padding: 15, marginBottom: 14 },
   introSummaryLabel: { color: colors.blueDark, fontSize: 9, fontWeight: "900", letterSpacing: 1.1, marginBottom: 6 },
   introSummaryText: { color: colors.ink, fontSize: 15, lineHeight: 23, fontWeight: "600" },
+  guidanceEvidenceNote: { paddingHorizontal: 3, marginBottom: 12 },
+  guidanceEvidenceTitle: { color: colors.blueDark, fontSize: 11, fontWeight: "900" },
+  guidanceEvidenceBody: { color: colors.muted, fontSize: 9, lineHeight: 14, marginTop: 3 },
   stepsSection: { marginTop: 4, marginBottom: 14 },
   stepsHeaderRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, paddingHorizontal: 2 },
   stepsSectionTitle: { color: colors.ink, fontSize: 15, fontWeight: "900", letterSpacing: -0.2 },
@@ -1513,8 +1537,8 @@ return StyleSheet.create({
   drawerItem: { minHeight: 60, borderRadius: 15, borderWidth: 1, borderColor: colors.glassBorder, flexDirection: "row", alignItems: "center", paddingHorizontal: 8, marginBottom: 5, overflow: "hidden", backgroundColor: colors.glassSurface },
   drawerItemSelected: { backgroundColor: colors.blueTint, borderColor: colors.blue },
   drawerItemPressed: { opacity: 0.78 },
-  drawerItemIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center", marginRight: 11, shadowColor: colors.navy, shadowOpacity: 0.16, shadowRadius: 5, shadowOffset: { width: 2, height: 2 }, elevation: 2 },
-  drawerItemIconSelected: { backgroundColor: colors.blueTint, borderColor: colors.line },
+  drawerItemIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.52)", borderWidth: 1, borderColor: colors.glassBorder, alignItems: "center", justifyContent: "center", marginRight: 11, shadowColor: colors.navy, shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 0 },
+  drawerItemIconSelected: { backgroundColor: "rgba(255,255,255,0.78)", borderColor: colors.blue, shadowOpacity: 0, elevation: 0 },
   drawerItemIconText: { color: colors.muted, fontSize: 18, fontWeight: "700" },
   drawerItemIconTextSelected: { color: colors.blueDark },
   drawerItemCopy: { flex: 1 },
@@ -1586,18 +1610,13 @@ return StyleSheet.create({
   aboutHeroTitle: { color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: "900", marginTop: 14 },
   aboutHeroBody: { color: colors.muted, fontSize: 10, lineHeight: 16, marginTop: 7 },
   startupOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 80, elevation: 80, alignItems: "center", justifyContent: "center" },
-  startupBrand: { width: 280, alignItems: "center", justifyContent: "center", marginTop: -34 },
-  startupMarkStage: { width: 210, height: 210, alignItems: "center", justifyContent: "center", marginBottom: 15 },
-  startupHalo: { position: "absolute", width: 154, height: 154, borderRadius: 77, backgroundColor: colors.glassSurface, borderWidth: 1, borderColor: colors.glassBorder, shadowColor: colors.blue, shadowOpacity: 0.15, shadowRadius: 23, shadowOffset: { width: 0, height: 5 }, elevation: 4 },
-  startupRing: { position: "absolute", top: 12, left: 12, width: 186, height: 186, borderRadius: 93, borderWidth: 1, borderColor: colors.glassFeatureBorder },
-  startupOrbit: { position: "absolute", top: 3, left: 3, width: 204, height: 204, borderRadius: 102, alignItems: "center" },
-  startupOrbitDot: { width: 7, height: 7, borderRadius: 4, marginTop: 2, backgroundColor: colors.teal, shadowColor: colors.teal, shadowOpacity: 0.55, shadowRadius: 6, elevation: 3 },
-  startupLogo: { width: 148, height: 148 },
-  startupWordmark: { color: colors.ink, fontSize: 27, fontWeight: "900", letterSpacing: -0.8, textAlign: "center" },
+  startupBrand: { width: 280, alignItems: "center", justifyContent: "center" },
+  startupMarkStage: { width: 210, height: 190, alignItems: "center", justifyContent: "center", marginBottom: 17 },
+  startupLogo: { width: 178, height: 178 },
+  startupWordmark: { color: colors.ink, fontSize: 29, fontWeight: "900", letterSpacing: -0.8, textAlign: "center" },
   startupWordmarkAccent: { color: colors.blue },
   startupTagline: { color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2.4, textAlign: "center", marginTop: 7 },
-  startupDescriptor: { color: colors.muted, fontSize: 7, fontWeight: "800", letterSpacing: 1.1, textAlign: "center", marginTop: 28, opacity: 0.72 },
-  startupLoadingTrack: { position: "absolute", bottom: 44, width: 42, height: 3, borderRadius: 2, backgroundColor: colors.blueTint, overflow: "hidden" },
+  startupLoadingTrack: { position: "absolute", bottom: 44, width: 54, height: 3, borderRadius: 2, backgroundColor: colors.blueTint, overflow: "hidden" },
   startupLoadingFill: { height: "100%", borderRadius: 2, backgroundColor: colors.blue },
 });
 }
