@@ -85,6 +85,24 @@ def ready(response: Response) -> ServiceHealth:
         503: {"model": ErrorEnvelope},
         504: {"model": ErrorEnvelope},
     },
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["question", "image"],
+                        "properties": {
+                            "question": {"type": "string", "maxLength": 2000},
+                            "session_id": {"type": "string", "format": "uuid"},
+                            "image": {"type": "string", "format": "binary"},
+                        },
+                    }
+                }
+            },
+        }
+    },
     tags=["internal"],
 )
 async def accept_diagnosis(
@@ -114,7 +132,6 @@ async def accept_diagnosis(
         except ValueError:
             pass
 
-    print(f"DEBUG ORCHESTRATOR: form keys = {list(form.keys())}, image_val type = {type(form.get('image'))}")
     image_val = form.get("image")
     content: bytes
     content_type: str | None = None
@@ -140,11 +157,9 @@ async def accept_diagnosis(
         return _error_response(
             request_id, "MISSING_IMAGE", "An image file is required.", 422
         )
-    print(f"DEBUG ORCHESTRATOR: content len = {len(content)}, content_type = {content_type}")
     try:
         resolved_media_type = validate_image(content_type, content)
     except ImageUploadError as error:
-        print(f"DEBUG ORCHESTRATOR: validate_image raised ImageUploadError: {error.code} {error.message}")
         return _error_response(
             request_id, error.code, error.message, error.status_code
         )

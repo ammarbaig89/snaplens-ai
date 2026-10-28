@@ -14,40 +14,38 @@ Gateway, and displays the answer, safety notes, and source links.
 
 ## Install and start
 
-From this folder in PowerShell:
+Install the mobile dependencies and create its local API URL file from this
+folder in PowerShell:
 
 ```powershell
 npm ci
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
-# Edit .env and set EXPO_PUBLIC_API_BASE_URL for your environment.
+```
+
+Start all backend services in a separate PowerShell window from this folder:
+
+```powershell
+Set-Location ..
+.\scripts\start-local.ps1
+```
+
+The launcher detects your PC's LAN address and writes it to `mobile-app/.env`
+for a physical phone. For an emulator or simulator, edit that file and use the
+matching address below. Keep the phone and PC on the same Wi-Fi, and allow
+Gateway TCP port `8000` through Windows Firewall when prompted.
+
+In another PowerShell window, start Expo from this folder:
+
+```powershell
 npm start -- --lan
 ```
 
-Press `a` to open an Android emulator, `i` for an available iOS simulator, or
-scan the QR code with Expo Go on a phone. For a phone, set the URL in `.env` to
-the development PC's LAN IP and port `8000`, for example
-`http://192.168.1.20:8000`. The phone and PC must be on the same network, and
-the Gateway must listen on a reachable interface. Do not use `localhost` from a
-physical phone: it points to the phone itself. Android emulator uses
+Scan the QR code with Expo Go, press `a` for an Android emulator, or press `i`
+for an available iOS simulator. A physical phone must use the PC's LAN IP;
+`localhost` points to the phone itself. Android emulator uses
 `http://10.0.2.2:8000`; the iOS simulator usually uses
-`http://127.0.0.1:8000`.
-
-For a physical Android phone when Windows Firewall blocks Gateway port `8000`,
-use the local Metro proxy instead: set `EXPO_PUBLIC_API_BASE_URL` in
-`mobile-app/.env` to `http://<PC-LAN-IP>:8081`. Metro forwards diagnosis and
-health requests to the Gateway on the PC. Keep Expo running in LAN mode while
-testing. This proxy is for local development and is not used by production
-builds.
-
-For LAN use, start the Gateway so it listens on all interfaces:
-
-```powershell
-..\.venv\Scripts\python.exe -m uvicorn services.api-gateway.main:app --host 0.0.0.0 --port 8000
-```
-
-Also start the Orchestrator, Vision, and Retrieval services in separate
-terminals using their documented local commands. Keep the provider defaults in
-mock mode while building the UI; no API credits are used in mock mode.
+`http://127.0.0.1:8000`. Port `8081` is Expo Metro, not the SnapLens Gateway;
+use Gateway port `8000` for diagnosis and voice sessions.
 
 ## Providers and secrets
 
@@ -91,9 +89,9 @@ SnapLens does not persist voice recordings. Voice sessions have server-side
 concurrency and duration limits. Expo Go can load the app-side audio modules;
 rebuild a native app if you change native permission configuration.
 For a physical phone, point `EXPO_PUBLIC_API_BASE_URL` directly to the PC's
-Gateway URL on port `8000` and allow that port through the PC firewall. The
-optional Expo Metro proxy on port `8081` only forwards HTTP diagnosis calls;
-it cannot carry the voice WebSocket connection.
+Gateway URL on port `8000` and allow that port through the PC firewall. Expo
+Metro runs on port `8081`; it is not the Gateway and does not carry the voice
+WebSocket connection.
 
 ## Checks
 

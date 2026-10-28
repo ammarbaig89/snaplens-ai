@@ -1,9 +1,7 @@
 """Contract and handler tests for the Gateway upload boundary."""
 
-import json
 import importlib.util
 import sys
-from tempfile import SpooledTemporaryFile
 import unittest
 from pathlib import Path
 from typing import Any, Coroutine, TypeVar
@@ -13,7 +11,7 @@ from uuid import UUID
 import httpx
 from fastapi import Response
 from pydantic import ValidationError
-from starlette.datastructures import Headers, UploadFile
+from starlette.datastructures import FormData
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -54,17 +52,48 @@ def run_immediate_coroutine(coroutine: Coroutine[Any, Any, Result]) -> Result:
     raise AssertionError("The mocked route unexpectedly suspended for I/O")
 
 
+class FormRequest:
+    """Lightweight Request double: exercise route logic without a socket loop."""
+
+    def __init__(self, form: FormData) -> None:
+        self._form = form
+
+    async def form(self, *, max_part_size: int) -> FormData:
+        del max_part_size
+        return self._form
+
+
+def form_request(
+    *,
+    data: dict[str, str],
+    files: dict[str, tuple[str, bytes, str]],
+) -> FormRequest:
+    parts: list[tuple[str, Any]] = list(data.items())
+    parts.extend((name, payload[1]) for name, payload in files.items())
+    return FormRequest(FormData(parts))
+
+
+def post_gateway(
+    *,
+    data: dict[str, str],
+    files: dict[str, tuple[str, bytes, str]],
+    headers: dict[str, str] | None = None,
+) -> Any:
+    request = form_request(data=data, files=files)
+    request_id_value = (headers or {}).get("X-Request-ID")
+    request_id = UUID(request_id_value) if request_id_value else None
+    result = run_immediate_coroutine(gateway.create_diagnosis(request, request_id))
+    if isinstance(result, DiagnosisResult):
+        return httpx.Response(200, json=result.model_dump(mode="json"))
+    return httpx.Response(
+        result.status_code,
+        content=result.body,
+        headers=dict(result.headers),
+    )
+
+
 class GatewayTests(unittest.TestCase):
-    @staticmethod
-    def png_upload(content: bytes = b"\x89PNG\r\n\x1a\nfixture") -> UploadFile:
-        file = SpooledTemporaryFile()
-        file.write(content)
-        file.seek(0)
-        return UploadFile(
-            filename="device.png",
-            file=file,
-            headers=Headers({"content-type": "image/png"}),
-        )
+    PNG = b"\x89PNG\r\n\x1a\nfixture"
 
     def test_live_health(self) -> None:
         from main import live
@@ -86,8 +115,6 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(health.status, "not_ready")
 
     def test_gateway_to_orchestrator_handler_path(self) -> None:
-        from main import create_diagnosis
-
         request_id = UUID("550e8400-e29b-41d4-a716-446655440000")
         session_id = UUID("550e8400-e29b-41d4-a716-446655440001")
         forwarded: list[tuple[DiagnosisRequest, UUID, bytes]] = []
@@ -111,29 +138,28 @@ class GatewayTests(unittest.TestCase):
                     }
 
             with patch.object(orchestrator.app.state, "diagnosis_graph", FakeGraph()):
-                diagnosis = orchestrator.accept_diagnosis(
-                    question=body.question,
-                    session_id=body.session_id,
-                    image=self.png_upload(content),
-                    x_request_id=forwarded_id,
+                internal_request = form_request(
+                    data={"question": body.question, "session_id": str(body.session_id)},
+                    files={"image": ("device.png", content, content_type or "image/png")},
+                )
+                diagnosis = run_immediate_coroutine(
+                    orchestrator.accept_diagnosis(internal_request, forwarded_id)
                 )
             return httpx.Response(
                 200,
                 json=diagnosis.model_dump(mode="json"),
-                request=httpx.Request("POST", "http://orchestrator/internal/v1/diagnoses"),
+                request=httpx.Request("POST", "http://orchestrator.test/internal/v1/diagnoses"),
             )
 
         with patch("main._forward_diagnosis", new=in_process_orchestrator):
-            result = run_immediate_coroutine(
-                create_diagnosis(
-                    question="What does this error code mean?",
-                    session_id=session_id,
-                    image=self.png_upload(),
-                    x_request_id=request_id,
-                )
+            response = post_gateway(
+                data={"question": "What does this error code mean?", "session_id": str(session_id)},
+                files={"image": ("device.png", self.PNG, "image/png")},
+                headers={"X-Request-ID": str(request_id)},
             )
 
-        self.assertIsInstance(result, DiagnosisResult)
+        self.assertEqual(response.status_code, 200)
+        result = DiagnosisResult.model_validate(response.json())
         self.assertEqual(result.request_id, request_id)
         self.assertEqual(result.session_id, session_id)
         self.assertEqual(forwarded[0][1], request_id)
@@ -150,26 +176,14 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(oversized.exception.status_code, 413)
 
     def test_gateway_returns_safe_error_for_unsupported_image(self) -> None:
-        from main import create_diagnosis
-
         request_id = UUID("550e8400-e29b-41d4-a716-446655440000")
-        upload = UploadFile(
-            filename="bad.svg",
-            file=SpooledTemporaryFile(),
-            headers=Headers({"content-type": "image/svg+xml"}),
-        )
-        upload.file.write(b"<svg></svg>")
-        upload.file.seek(0)
-        response = run_immediate_coroutine(
-            create_diagnosis(
-                question="What is this?",
-                session_id=None,
-                image=upload,
-                x_request_id=request_id,
-            )
+        response = post_gateway(
+            data={"question": "What is this?"},
+            files={"image": ("bad.svg", b"<svg></svg>", "image/svg+xml")},
+            headers={"X-Request-ID": str(request_id)},
         )
         self.assertEqual(response.status_code, 415)
-        payload = json.loads(response.body)
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "UNSUPPORTED_IMAGE_TYPE")
         self.assertEqual(payload["error"]["request_id"], str(request_id))
 
@@ -210,8 +224,6 @@ class GatewayTests(unittest.TestCase):
             DiagnosisRequest(question="", unexpected="not allowed")
 
     def test_upstream_error_is_stable_and_hides_internal_detail(self) -> None:
-        from main import create_diagnosis
-
         async def unavailable(
             body: DiagnosisRequest,
             request_id: UUID,
@@ -224,18 +236,14 @@ class GatewayTests(unittest.TestCase):
             )
 
         with patch("main._forward_diagnosis", new=unavailable):
-            response = run_immediate_coroutine(
-                create_diagnosis(
-                    question="Need help",
-                    session_id=None,
-                    image=self.png_upload(),
-                    x_request_id=None,
-                )
+            response = post_gateway(
+                data={"question": "Need help"},
+                files={"image": ("device.png", self.PNG, "image/png")},
             )
         self.assertEqual(response.status_code, 502)
-        payload = json.loads(response.body)
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "UPSTREAM_UNAVAILABLE")
-        self.assertNotIn("internal socket detail", response.body.decode())
+        self.assertNotIn("internal socket detail", response.text)
 
 
 if __name__ == "__main__":

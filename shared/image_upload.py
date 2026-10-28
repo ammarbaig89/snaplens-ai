@@ -108,20 +108,13 @@ def validate_image(content_type: str | None, content: bytes) -> None:
     elif len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP":
         detected_type = "image/webp"
 
-    media_type = (content_type or "").split(";", 1)[0].strip().lower()
-
-    # If media_type is generic or missing, adopt the byte-detected type
-    if not media_type or media_type in ("application/octet-stream", "binary/octet-stream"):
-        media_type = detected_type or ""
-
-    # If the declared media type doesn't match the signature, but bytes are a valid supported image, trust the actual bytes
-    if detected_type and detected_type in ALLOWED_IMAGE_TYPES:
-        media_type = detected_type
-
-    if media_type not in ALLOWED_IMAGE_TYPES:
+    # Require a supported image signature; a client-supplied MIME type alone
+    # is not proof that the upload contains an image. If the declared type is
+    # generic or incorrect, use the recognized signature as the source of truth.
+    if detected_type not in ALLOWED_IMAGE_TYPES:
         raise ImageUploadError(
             "UNSUPPORTED_IMAGE_TYPE",
             "Upload a JPEG, PNG, or WebP image.",
             415,
         )
-    return media_type
+    return detected_type

@@ -108,6 +108,24 @@ async def ready(response: Response) -> ServiceHealth:
         502: {"model": ErrorEnvelope},
         504: {"model": ErrorEnvelope},
     },
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["question", "image"],
+                        "properties": {
+                            "question": {"type": "string", "maxLength": 2000},
+                            "session_id": {"type": "string", "format": "uuid"},
+                            "image": {"type": "string", "format": "binary"},
+                        },
+                    }
+                }
+            },
+        }
+    },
     tags=["diagnoses"],
 )
 async def create_diagnosis(
@@ -151,7 +169,6 @@ async def create_diagnosis(
         except ValueError:
             pass
 
-    print(f"DEBUG: form keys = {list(form.keys())}, image_val type = {type(form.get('image'))}")
     image_val = form.get("image")
     content: bytes
     content_type: str | None = None
@@ -224,7 +241,11 @@ async def create_diagnosis(
         )
 
     if not result.is_success:
-        print(f"DEBUG: Orchestrator failed with status {result.status_code}: {result.text}")
+        LOGGER.warning(
+            "Orchestrator request failed: request_id=%s status=%s",
+            request_id,
+            result.status_code,
+        )
         # Keep the orchestrator's safe, structured diagnosis error so the app
         # can show the real cause (for example provider quota or configuration).
         try:

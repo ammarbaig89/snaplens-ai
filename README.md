@@ -275,6 +275,17 @@ curl.exe -X POST http://127.0.0.1:8000/v1/diagnoses `
   -F "image=@scripts/sample.jpg"
 ```
 
+### Run the backend service tests
+
+From the repository root, run the offline service and contract suite:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+```
+
+The tests use local fakes for external providers, so they do not call Gemini or
+Tavily and do not consume API credits. A successful run ends with `OK`.
+
 Dockerfiles and `docker-compose.yml` are optional configuration for later
 container-based development; the commands above run services directly on
 Windows without Docker.
